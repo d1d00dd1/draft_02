@@ -36,14 +36,29 @@ export class AudioEngine {
     probabilityMask: number[] = [];
     microTiming: number[] = [];
 
+    isIOS(): boolean {
+        return /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+               (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    }
+
     constructor() {
         this.regeneratePatterns();
     }
 
     async init() {
+        const ua = navigator.userAgent;
+        const isIOS = this.isIOS();
+        console.log('[Audio] Init start', { ua, isIOS, hasAudioContext: !!window.AudioContext, hasWebkit: !!(window as any).webkitAudioContext });
+
         if (!this.isSetup) {
             const AC = window.AudioContext || (window as any).webkitAudioContext;
-            this.ctx = new AC();
+            try {
+                this.ctx = new AC();
+                console.log('[Audio] AudioContext created', { state: this.ctx.state, sampleRate: this.ctx.sampleRate });
+            } catch (e) {
+                console.error('[Audio] Failed to create AudioContext', e);
+                return;
+            }
 
             this.busGain = this.ctx.createGain();
             this.busGain.gain.value = 1.0;
@@ -59,32 +74,61 @@ export class AudioEngine {
             this.analyser.connect(this.ctx.destination);
 
             if (this.ctx.state === 'suspended') {
-                await this.ctx.resume();
+                console.log('[Audio] Context suspended, resuming...');
+                try {
+                    await this.ctx.resume();
+                    console.log('[Audio] Context resumed', { state: this.ctx.state });
+                } catch (e) {
+                    console.error('[Audio] Failed to resume context', e);
+                }
             }
 
             this.setupMasterFX();
             this.setupDrone();
-
             this.isSetup = true;
+            console.log('[Audio] Setup complete', { hasDrone: !!this.droneOsc, hasMasterGain: !!this.masterGain });
         } else {
             if (this.ctx?.state === 'suspended') {
-                await this.ctx.resume();
+                console.log('[Audio] Context suspended on reinit, resuming...');
+                try {
+                    await this.ctx.resume();
+                    console.log('[Audio] Context resumed', { state: this.ctx.state });
+                } catch (e) {
+                    console.error('[Audio] Failed to resume context', e);
+                }
             }
             if (!this.droneOsc || !this.droneLFO) this.setupDrone();
         }
 
         this.isPlaying = true;
-        if (!this.ctx) return;
+        if (!this.ctx) {
+            console.error('[Audio] No context available');
+            return;
+        }
 
         this.targetVolume = 0.95;
         this.globalVolume = 0.95;
         if (this.masterGain) {
             this.masterGain.gain.value = 0.95;
+            console.log('[Audio] Master gain set', { gain: this.masterGain.gain.value });
         }
 
         this.nextNoteTime = this.ctx.currentTime;
-        if (this.timerID === null) this.scheduler();
-        if (this.volumeRAF === null) this.volumeLoop();
+        if (!this.timerID) {
+            this.scheduler();
+            console.log('[Audio] Scheduler started');
+        }
+        if (!this.volumeRAF) {
+            this.volumeLoop();
+            console.log('[Audio] Volume loop started');
+        }
+
+        console.log('[Audio] Init complete', { 
+            state: this.ctx.state, 
+            isPlaying: this.isPlaying, 
+            hasMasterGain: !!this.masterGain,
+            masterGainValue: this.masterGain?.gain.value 
+        });
     }
 
 
@@ -94,35 +138,28 @@ export class AudioEngine {
 
     triggerModeSwitch() {
         if (!this.ctx) return;
-        const modes: ('deep' | 'glitch' | 'drive')[] = ['deep', 'glitch', 'drive'];
-        const currentIdx = modes.indexOf(this.blendMode);
-        const nextIdx = (currentIdx + 1) % modes.length;
-        this.blendMode = modes[nextIdx];
-        
+        const modes = ['deep', 'glitch', 'drive'];
+        const idx = modes.indexOf(this.blendMode);
+        this.blendMode = modes[(idx + 1) % modes.length] as any;
         this.regeneratePatterns();
-        
         const t = this.ctx.currentTime;
         this.triggerGlitch(t);
         this.triggerFMBass(t, 55, 1.0);
-        
-        console.log(`Switched to ${this.blendMode} mode`);
     }
 
     triggerInteraction() {
         if (!this.ctx) return;
         const now = this.ctx.currentTime;
-        
-        const reps = Math.floor(Math.random() * 12) + 6; 
-        const speed = (Math.random() * 0.04) + 0.008; 
+        const reps = Math.floor(Math.random() * 12) + 6;
+        const speed = Math.random() * 0.04 + 0.008;
         const panStart = Math.random() * 2 - 1;
         
-        for(let i=0; i<reps; i++) {
-             const t = now + (i * speed);
-             const pMod = (reps - i) * 500; 
-             const pan = panStart * ((i % 2 === 0) ? 1 : -1); 
-             
-             if (Math.random() > 0.6) this.triggerGlitch(t);
-             else this.triggerHat(t, 0.5, pan, pMod);
+        for(let i = 0; i < reps; i++) {
+            const t = now + i * speed;
+            const pMod = (reps - i) * 500;
+            const pan = panStart * (i % 2 === 0 ? 1 : -1);
+            if (Math.random() > 0.6) this.triggerGlitch(t);
+            else this.triggerHat(t, 0.5, pan, pMod);
         }
         
         this.tempo = this.baseTempo * (Math.random() > 0.5 ? 0.75 : 1.25);
@@ -132,7 +169,11 @@ export class AudioEngine {
         if (!this.ctx || !this.busGain || !this.masterGain) return;
 
         this.reverbNode = this.ctx.createConvolver();
-        this.reverbNode.buffer = this.createImpulseResponse(3.0, 4.0);
+        setTimeout(() => {
+            if (this.ctx && this.reverbNode) {
+                this.reverbNode.buffer = this.createImpulseResponse(2.0, 4.0);
+            }
+        }, 0);
         this.reverbGain = this.ctx.createGain();
         this.reverbGain.gain.value = 0.4;
 
@@ -172,35 +213,60 @@ export class AudioEngine {
 
 
     setupDrone() {
-        if (!this.ctx || !this.reverbNode || !this.busGain) return;
+        if (!this.ctx || !this.reverbNode || !this.busGain) {
+            console.warn('[Audio] Cannot setup drone', { hasCtx: !!this.ctx, hasReverb: !!this.reverbNode, hasBus: !!this.busGain });
+            return;
+        }
         
-        this.droneOsc = this.ctx.createOscillator();
-        this.droneOsc.type = 'sawtooth';
-        this.droneOsc.frequency.value = 55.0; 
-        
-        this.droneFilter = this.ctx.createBiquadFilter();
-        this.droneFilter.type = 'bandpass';
-        this.droneFilter.frequency.value = 200;
-        this.droneFilter.Q.value = 2;
+        try {
+            this.droneOsc = this.ctx.createOscillator();
+            this.droneOsc.type = 'sawtooth';
+            this.droneOsc.frequency.value = 55.0;
+            
+            this.droneFilter = this.ctx.createBiquadFilter();
+            this.droneFilter.type = 'bandpass';
+            this.droneFilter.frequency.value = 200;
+            this.droneFilter.Q.value = 2;
 
-        const droneGain = this.ctx.createGain();
-        droneGain.gain.value = 0.1;
+            const droneGain = this.ctx.createGain();
+            droneGain.gain.value = 0.1;
 
-        this.droneLFO = this.ctx.createOscillator();
-        this.droneLFO.frequency.value = 0.1;
-        const lfoGain = this.ctx.createGain();
-        lfoGain.gain.value = 100; 
+            this.droneLFO = this.ctx.createOscillator();
+            this.droneLFO.frequency.value = 0.1;
+            const lfoGain = this.ctx.createGain();
+            lfoGain.gain.value = 100; 
 
-        this.droneLFO.connect(lfoGain);
-        lfoGain.connect(this.droneFilter.frequency);
+            this.droneLFO.connect(lfoGain);
+            lfoGain.connect(this.droneFilter.frequency);
 
-        this.droneOsc.connect(this.droneFilter);
-        this.droneFilter.connect(droneGain);
-        droneGain.connect(this.busGain);
-        droneGain.connect(this.reverbNode);
-        
-        this.droneOsc.start();
-        this.droneLFO.start();
+            this.droneOsc.connect(this.droneFilter);
+            this.droneFilter.connect(droneGain);
+            droneGain.connect(this.busGain);
+            droneGain.connect(this.reverbNode);
+            
+            if (this.ctx.state === 'running') {
+                this.droneOsc.start();
+                this.droneLFO.start();
+                console.log('[Audio] Drone oscillators started');
+            } else {
+                console.warn('[Audio] Context not running, will start oscillators when resumed', { state: this.ctx.state });
+                const startOscillators = () => {
+                    if (this.ctx?.state === 'running' && this.droneOsc && this.droneLFO) {
+                        try {
+                            this.droneOsc.start();
+                            this.droneLFO.start();
+                            console.log('[Audio] Drone oscillators started after context resume');
+                            this.ctx.removeEventListener('statechange', startOscillators);
+                        } catch (e) {
+                            console.error('[Audio] Failed to start oscillators', e);
+                        }
+                    }
+                };
+                this.ctx.addEventListener('statechange', startOscillators);
+            }
+        } catch (e) {
+            console.error('[Audio] Failed to setup drone', e);
+        }
     }
 
     createImpulseResponse(duration: number, decay: number): AudioBuffer {
@@ -210,18 +276,21 @@ export class AudioEngine {
         const left = impulse.getChannelData(0);
         const right = impulse.getChannelData(1);
 
-        for (let i = 0; i < length; i++) {
+        const step = Math.max(1, Math.floor(length / 10000));
+        for (let i = 0; i < length; i += step) {
             const n = i / length;
             const noise = (Math.random() * 2 - 1) * Math.pow(1 - n, decay);
-            left[i] = noise;
-            right[i] = noise;
+            for (let j = 0; j < step && (i + j) < length; j++) {
+                left[i + j] = noise;
+                right[i + j] = noise;
+            }
         }
         return impulse;
     }
 
     makeDistortionCurve(amount: number) {
         const k = amount;
-        const n_samples = 44100;
+        const n_samples = 22050;
         const curve = new Float32Array(n_samples);
         const deg = Math.PI / 180;
         for (let i = 0; i < n_samples; ++i) {
@@ -233,16 +302,15 @@ export class AudioEngine {
 
     volumeLoop() {
         if (!this.ctx || !this.masterGain) return;
-
         if (!this.isPlaying) {
-            if (this.volumeRAF !== null) {
+            if (this.volumeRAF) {
                 cancelAnimationFrame(this.volumeRAF);
                 this.volumeRAF = null;
             }
             return;
         }
 
-        const lerp = (start: number, end: number, amt: number) => (1 - amt) * start + amt * end;
+        const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
         this.globalVolume = lerp(this.globalVolume, this.targetVolume, 0.05);
         this.masterGain.gain.setTargetAtTime(this.globalVolume, this.ctx.currentTime, 0.1);
 
@@ -251,19 +319,16 @@ export class AudioEngine {
         }
 
         if (this.filterNode) {
-            const baseFreq = 400;
-            const range = 8000;
-            const chaosFreq = Math.random() * 500 * this.chaos;
-            const targetFreq = baseFreq + (Math.pow(this.modY, 2) * range) + chaosFreq;
-            this.filterNode.frequency.setTargetAtTime(targetFreq, this.ctx.currentTime, 0.05);
-            this.filterNode.Q.value = 1 + (this.modX * 10) + (this.chaos * 15);
+            const freq = 400 + Math.pow(this.modY, 2) * 8000 + Math.random() * 500 * this.chaos;
+            this.filterNode.frequency.setTargetAtTime(freq, this.ctx.currentTime, 0.05);
+            this.filterNode.Q.value = 1 + this.modX * 10 + this.chaos * 15;
         }
 
         if (this.delayNode && this.feedbackGain) {
-            const baseDelay = 3 / 16 * (60 / this.tempo);
-            const warp = ((this.modX > 0.5) || (this.chaos > 0.5)) ? Math.random() * 0.05 : 0;
-            this.delayNode.delayTime.setTargetAtTime(baseDelay + warp, this.ctx.currentTime, 0.05);
-            this.feedbackGain.gain.value = 0.5 + (this.chaos * 0.4);
+            const delay = 3 / 16 * (60 / this.tempo);
+            const warp = (this.modX > 0.5 || this.chaos > 0.5) ? Math.random() * 0.05 : 0;
+            this.delayNode.delayTime.setTargetAtTime(delay + warp, this.ctx.currentTime, 0.05);
+            this.feedbackGain.gain.value = 0.5 + this.chaos * 0.4;
         }
 
         this.volumeRAF = requestAnimationFrame(() => this.volumeLoop());

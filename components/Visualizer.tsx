@@ -2,30 +2,14 @@ import React, { useEffect, useRef } from 'react';
 import p5 from 'p5';
 import { audioEngine } from '../services/AudioEngine';
 
-const Visualizer: React.FC = () => {
+function Visualizer() {
     const containerRef = useRef<HTMLDivElement>(null);
     const p5Instance = useRef<p5 | null>(null);
 
     useEffect(() => {
-        // #region agent log
-        fetch('http://127.0.0.1:7243/ingest/2f539a89-c611-48c4-abc8-28e976db483b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Visualizer.tsx:9',message:'Visualizer useEffect entry',data:{hasContainerRef:!!containerRef,containerRefCurrent:!!containerRef.current,hasP5:!!p5},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-        // #endregion
-
-        if (!containerRef.current) {
-            // #region agent log
-            fetch('http://127.0.0.1:7243/ingest/2f539a89-c611-48c4-abc8-28e976db483b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Visualizer.tsx:12',message:'ERROR: containerRef.current is null',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-            // #endregion
-            return;
-        }
-
-        // #region agent log
-        fetch('http://127.0.0.1:7243/ingest/2f539a89-c611-48c4-abc8-28e976db483b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Visualizer.tsx:17',message:'Before sketch function definition',data:{hasP5:!!p5,hasCreateCanvas:!!p5.prototype.createCanvas},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-        // #endregion
+        if (!containerRef.current) return;
 
         const sketch = (p: p5) => {
-            // #region agent log
-            fetch('http://127.0.0.1:7243/ingest/2f539a89-c611-48c4-abc8-28e976db483b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Visualizer.tsx:21',message:'p5 sketch function entry',data:{hasP:!!p,hasWindowWidth:!!p.windowWidth},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-            // #endregion
             const fontSize = 20;
             let cols: number, rows: number, size: number;
             
@@ -34,22 +18,22 @@ const Visualizer: React.FC = () => {
             let gridColors: Uint8ClampedArray; 
             let gridMeta: Uint8Array;
             let gridGlow: Float32Array;     
-            let floatingAscii: Array<{x: number, y: number, char: string, life: number, vx: number, vy: number}> = [];
-            let floatingPetals: Array<{x: number, y: number, size: number, angle: number, vx: number, vy: number, va: number, life: number, color: {r: number, g: number, b: number}}> = [];
-            let ripples: Array<{x: number, y: number, radius: number, life: number, maxLife: number, strength: number, velocity: number, amplitude: number, phase: number, frequency: number, interference: number}> = [];
-            let movingLotus: {x: number, y: number, bloomProgress: number, angle: number, vx: number, vy: number, petals: Array<{angle: number, size: number, life: number, baseSize: number}>} | null = null;
+            let floatingAscii: any[] = [];
+            let floatingPetals: any[] = [];
+            let ripples: any[] = [];
+            let movingLotus: any = null;
             let glitchOffset: Int16Array;
             let handDistance = 0.5;
             let blurBuffer: p5.Graphics;
             let bloomBuffer: p5.Graphics;
-            let rippleTrails: Array<{x: number, y: number, radius: number, alpha: number, life: number}> = [];
+            let rippleTrails: any[] = [];
             let charVelX: Float32Array;
             let charVelY: Float32Array;
             let charAccelX: Float32Array;
             let charAccelY: Float32Array;
             let charBaseX: Float32Array;
             let charBaseY: Float32Array;
-            let physicsParticles: Array<{x: number, y: number, vx: number, vy: number, ax: number, ay: number, mass: number, life: number}> = [];
+            let physicsParticles: any[] = [];
 
             const EMPTY_CHAR = "空";
 
@@ -102,33 +86,18 @@ const Visualizer: React.FC = () => {
                     capture = p.createCapture(p.VIDEO);
                     capture.size(120, 90);
                     capture.hide();
-                    cameraInitialized = true;
-                } catch (e) {
-                    console.warn("Camera permission denied:", e);
-                }
+                } catch (e) {}
+                cameraInitialized = true;
             };
             
             p.setup = () => {
-                // #region agent log
-                fetch('http://127.0.0.1:7243/ingest/2f539a89-c611-48c4-abc8-28e976db483b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Visualizer.tsx:111',message:'p.setup entry',data:{windowWidth:p.windowWidth,windowHeight:p.windowHeight,hasCreateCanvas:!!p.createCanvas},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-                // #endregion
-
                 p.createCanvas(p.windowWidth, p.windowHeight);
-
-                // #region agent log
-                fetch('http://127.0.0.1:7243/ingest/2f539a89-c611-48c4-abc8-28e976db483b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Visualizer.tsx:115',message:'After createCanvas',data:{hasCanvas:!!p.canvas,canvasWidth:p.canvas?.width,canvasHeight:p.canvas?.height},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-                // #endregion
-
                 (p.drawingContext as CanvasRenderingContext2D).font = `bold ${fontSize}px "Space Mono", monospace`;
                 p.textAlign(p.CENTER, p.CENTER);
                 p.noStroke();
                 p.frameRate(24);
 
                 calculateGrid();
-
-                // #region agent log
-                fetch('http://127.0.0.1:7243/ingest/2f539a89-c611-48c4-abc8-28e976db483b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Visualizer.tsx:125',message:'p.setup completed',data:{cols,rows,size},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-                // #endregion
 
                 blurBuffer = p.createGraphics(p.width, p.height);
                 bloomBuffer = p.createGraphics(p.width, p.height);
@@ -309,22 +278,22 @@ const Visualizer: React.FC = () => {
                 glitchRows = new Int16Array(rows).fill(0);
             };
 
-            function updateGlitchMap(force: boolean = false) {
-                if (!glitchRows || glitchRows.length === 0) return;
+            function updateGlitchMap(force = false) {
+                if (!glitchRows || !glitchRows.length) return;
 
                 const chaos = audioEngine.chaos;
-                const updateRate = Math.max(20, 60 - (chaos * 50));
-                if (!force && p.millis() - glitchUpdateTimer < updateRate) return;
+                const rate = Math.max(20, 60 - chaos * 50);
+                if (!force && p.millis() - glitchUpdateTimer < rate) return;
                 glitchUpdateTimer = p.millis();
 
                 if (Math.random() > 0.3) glitchRows.fill(0);
 
-                const numSlices = Math.floor(Math.random() * 35 + chaos * 20);
-                for(let i=0; i<numSlices; i++) {
+                const slices = Math.floor(Math.random() * 35 + chaos * 20);
+                for(let i = 0; i < slices; i++) {
                     const start = Math.floor(Math.random() * rows);
-                    const len = Math.floor(Math.random() * (rows/3) + 5);
+                    const len = Math.floor(Math.random() * rows / 3 + 5);
                     const offset = Math.floor((Math.random() - 0.5) * 300);
-                    for(let r=start; r < Math.min(rows, start+len); r++) {
+                    for(let r = start; r < Math.min(rows, start + len); r++) {
                         glitchRows[r] = offset;
                     }
                 }
@@ -459,18 +428,16 @@ const Visualizer: React.FC = () => {
             }
 
             function getPostDigitalColor(t: number, kick: number, chaos: number) {
-                const speed = 0.15 + (chaos * 0.1);
-                const baseIdx = Math.floor((t * speed) % frutigerAero.length);
-                const nextIdx = (baseIdx + 1) % frutigerAero.length;
-                const base = frutigerAero[baseIdx];
-                const next = frutigerAero[nextIdx];
+                const speed = 0.15 + chaos * 0.1;
+                const idx = Math.floor(t * speed % frutigerAero.length);
+                const next = (idx + 1) % frutigerAero.length;
                 const blend = (t * speed) % 1;
-                const timeWave = Math.sin(t * 2) * 0.3 + 0.7;
+                const wave = Math.sin(t * 2) * 0.3 + 0.7;
                 const chaosWave = Math.sin(t * 1.5 + chaos) * 0.2 + 0.8;
 
-                let r = p.lerp(base.r, next.r, blend) * timeWave * chaosWave;
-                let g = p.lerp(base.g, next.g, blend) * timeWave * chaosWave;
-                let b = p.lerp(base.b, next.b, blend) * timeWave * chaosWave;
+                let r = p.lerp(frutigerAero[idx].r, frutigerAero[next].r, blend) * wave * chaosWave;
+                let g = p.lerp(frutigerAero[idx].g, frutigerAero[next].g, blend) * wave * chaosWave;
+                let b = p.lerp(frutigerAero[idx].b, frutigerAero[next].b, blend) * wave * chaosWave;
 
                 if (kick > 0.5) {
                     const pulse = Math.sin(t * 5) * 0.15 + 0.85;
@@ -479,11 +446,11 @@ const Visualizer: React.FC = () => {
                     b *= pulse;
                 }
 
-                r = Math.max(100, Math.min(255, r));
-                g = Math.max(120, Math.min(255, g));
-                b = Math.max(160, Math.min(255, b));
-
-                return { r, g, b };
+                return {
+                    r: Math.max(100, Math.min(255, r)),
+                    g: Math.max(120, Math.min(255, g)),
+                    b: Math.max(160, Math.min(255, b))
+                };
             }
 
             p.draw = () => {
@@ -1176,37 +1143,6 @@ const Visualizer: React.FC = () => {
                         p.pop();
                     }
 
-                    if (leftHandActive || rightHandActive) {
-                        const zoomValue = zoomLevel.toFixed(2);
-                        const zoomText = `空${zoomValue}空`;
-                        const zoomX = p.width - 150;
-                        const zoomY = 40;
-                        
-                        const handInfo = [];
-                        if (leftHandActive) handInfo.push(`L:${leftHandY.toFixed(2)}`);
-                        if (rightHandActive) handInfo.push(`R:${rightHandY.toFixed(2)}`);
-                        
-                        for (let i = 0; i < zoomText.length; i++) {
-                            const x = zoomX + (i * fontSize * 1.2);
-                            const y = zoomY;
-                            const alpha = 200 + Math.sin(globalTime * 4 + i) * 20;
-                            const color = frutigerAero[Math.floor((globalTime * 0.5 + i * 0.2) % frutigerAero.length)];
-                            p.fill(color.r, color.g, color.b, alpha);
-                            p.text(zoomText[i], x, y);
-                        }
-                        
-                        if (handInfo.length > 0) {
-                            const handText = handInfo.join(' ');
-                            for (let i = 0; i < handText.length; i++) {
-                                const x = zoomX + (i * fontSize * 0.8);
-                                const y = zoomY + fontSize * 1.5;
-                                const alpha = 160 + Math.sin(globalTime * 3 + i) * 25;
-                                const color = frutigerAero[(Math.floor(globalTime * 0.4 + i * 0.15) % frutigerAero.length)];
-                                p.fill(color.r * 0.85, color.g * 0.85, color.b * 0.85, alpha);
-                                p.text(handText[i], x, y);
-                            }
-                        }
-                    }
 
                     const dt = 1.0 / 24.0;
                     const springConstant = 0.15;
@@ -1504,7 +1440,7 @@ const Visualizer: React.FC = () => {
                 } catch(e) { }
             };
 
-            function renderMovingLotus(lotus: {x: number, y: number, bloomProgress: number, angle: number, petals: Array<{angle: number, size: number, life: number, baseSize: number}>}, time: number, pdColor: any, kickVol: number) {
+            function renderMovingLotus(lotus: any, time: number, pdColor: any, kickVol: number) {
                 p.push();
                 p.translate(lotus.x, lotus.y);
                 p.rotate(lotus.angle);
@@ -1659,32 +1595,17 @@ const Visualizer: React.FC = () => {
             }
         };
 
-        // #region agent log
-        fetch('http://127.0.0.1:7243/ingest/2f539a89-c611-48c4-abc8-28e976db483b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Visualizer.tsx:1648',message:'Before new p5()',data:{hasContainerRef:!!containerRef.current,hasSketch:!!sketch},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-        // #endregion
-
-        try {
         p5Instance.current = new p5(sketch, containerRef.current);
 
-            // #region agent log
-            fetch('http://127.0.0.1:7243/ingest/2f539a89-c611-48c4-abc8-28e976db483b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Visualizer.tsx:1653',message:'After new p5() - p5 instance created',data:{hasP5Instance:!!p5Instance.current},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-            // #endregion
-        } catch (err) {
-            // #region agent log
-            fetch('http://127.0.0.1:7243/ingest/2f539a89-c611-48c4-abc8-28e976db483b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Visualizer.tsx:1657',message:'ERROR creating p5 instance',data:{error:err instanceof Error?err.message:String(err),errorName:err instanceof Error?err.name:'unknown'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-            // #endregion
-        }
-
         return () => {
-             if (p5Instance.current) {
-                 const videos = document.querySelectorAll('video');
-                 videos.forEach(v => v.remove());
-                 p5Instance.current.remove();
-             }
+            if (p5Instance.current) {
+                document.querySelectorAll('video').forEach(v => v.remove());
+                p5Instance.current.remove();
+            }
         };
     }, []);
 
     return <div ref={containerRef} className="absolute inset-0 z-0 bg-black" />;
-};
+}
 
 export default Visualizer;

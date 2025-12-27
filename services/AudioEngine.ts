@@ -48,17 +48,14 @@ export class AudioEngine {
     async init() {
         const ua = navigator.userAgent;
         const isIOS = this.isIOS();
-        console.log('[Audio] Init start', { ua, isIOS, hasAudioContext: !!window.AudioContext, hasWebkit: !!(window as any).webkitAudioContext });
+        console.log('[Audio] Init start', { ua, isIOS, hasAudioContext: !!window.AudioContext, hasWebkit: !!(window as any).webkitAudioContext, hasExistingCtx: !!this.ctx });
 
         if (!this.isSetup) {
-            const AC = window.AudioContext || (window as any).webkitAudioContext;
-            try {
-                this.ctx = new AC();
-                console.log('[Audio] AudioContext created', { state: this.ctx.state, sampleRate: this.ctx.sampleRate });
-            } catch (e) {
-                console.error('[Audio] Failed to create AudioContext', e);
+            if (!this.ctx) {
+                console.error('[Audio] No AudioContext provided! Must be created in user gesture handler.');
                 return;
             }
+            console.log('[Audio] Using provided AudioContext', { state: this.ctx.state, sampleRate: this.ctx.sampleRate });
 
             this.busGain = this.ctx.createGain();
             this.busGain.gain.value = 1.0;

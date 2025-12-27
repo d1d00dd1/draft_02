@@ -86,7 +86,9 @@ function Visualizer() {
                     capture = p.createCapture(p.VIDEO);
                     capture.size(120, 90);
                     capture.hide();
-                } catch (e) {}
+                } catch (e) {
+                    // no camera
+                }
                 cameraInitialized = true;
             };
             
@@ -1478,25 +1480,20 @@ function Visualizer() {
             }
 
             function getPetalRadius(theta: number, k: number, widthMod: number) {
-                const shape = Math.cos(k * theta / 2); 
-                return Math.pow(Math.abs(shape), 1.0/widthMod); 
+                return Math.pow(Math.abs(Math.cos(k * theta / 2)), 1.0 / widthMod);
             }
 
             function renderLayer(cfg: any, baseRad: number, time: number, cx: number, sx: number, cy: number, sy: number, pdColor: any, audio: number, chaos: number) {
-                const startRing = 0;
-                
-                const twist = Math.sin(time * 0.2) * 0.5 * (chaos + 0.2 + audio); 
-                const morphWidth = (cfg.width || 1.0) + (Math.sin(time * 0.6) * 0.5) + (chaos * 0.5);
-                const kDrift = Math.sin(time * 0.1 + cfg.rad) * (chaos * 5) + (audio * 10);
-                const morphK = cfg.k + kDrift;
+                const twist = Math.sin(time * 0.2) * 0.5 * (chaos + 0.2 + audio);
+                const morphWidth = (cfg.width || 1.0) + Math.sin(time * 0.6) * 0.5 + chaos * 0.5;
+                const morphK = cfg.k + Math.sin(time * 0.1 + cfg.rad) * (chaos * 5) + audio * 10;
 
-                for (let r = startRing; r < cfg.rings; r++) {
-                    const progress = r / cfg.rings; 
-                    let phi = (progress * 0.5 * Math.PI) + 0.1;
+                for (let r = 0; r < cfg.rings; r++) {
+                    const progress = r / cfg.rings;
+                    let phi = progress * 0.5 * Math.PI + 0.1;
                     
                     if (cfg.type === 'petal') {
-                        const curve = cfg.angle * (1 - Math.pow(progress, 2)); 
-                        phi = (Math.PI / 2) - curve; 
+                        phi = Math.PI / 2 - cfg.angle * (1 - Math.pow(progress, 2));
                         phi += Math.sin(time * 2 + r * 0.5) * 0.1 * (chaos + audio);
                     } 
 
@@ -1506,12 +1503,11 @@ function Visualizer() {
 
                         let rMult = 1.0;
                         if (cfg.type === 'pod') {
-                            rMult = 1.0 + (Math.sin(twistedTheta * 10) * 0.05);
+                            rMult = 1.0 + Math.sin(twistedTheta * 10) * 0.05;
                         } else {
                             const jitter = (Math.random() - 0.5) * audio * 0.1;
-                            const pShape = getPetalRadius(twistedTheta + (cfg.offset || 0) + jitter, morphK, morphWidth); 
-                            rMult = pShape; 
-                            if (pShape < 0.2) continue;
+                            rMult = getPetalRadius(twistedTheta + (cfg.offset || 0) + jitter, morphK, morphWidth);
+                            if (rMult < 0.2) continue;
                         }
 
                         rMult += Math.sin(twistedTheta * 3 + time * 0.2) * 0.02;
@@ -1531,10 +1527,10 @@ function Visualizer() {
                         let z = z0;
 
                         if (chaos > 0.5 && audio > 0.5) {
-                             const disp = (Math.random() - 0.5) * chaos * 50;
-                             x += disp; 
-                             y += disp;
-                             z += disp;
+                            const disp = (Math.random() - 0.5) * chaos * 50;
+                            x += disp;
+                            y += disp;
+                            z += disp;
                         }
 
                         let x2 = x * cy - z * sy;
@@ -1542,28 +1538,28 @@ function Visualizer() {
                         let y2 = y * cx - z2 * sx;
                         let z3 = y * sx + z2 * cx;
 
-                        const fov = 400; 
-                        const viewerZ = 350 - (audio * 100); 
+                        const fov = 400;
+                        const viewerZ = 350 - audio * 100;
                         const scale = fov / (z3 + viewerZ);
 
                         if (z3 + viewerZ < 10) continue;
 
-                        const col = Math.floor(cols / 2 + (x2 * scale));
-                        const row = Math.floor(rows / 2 + (y2 * scale));
+                        const col = Math.floor(cols / 2 + x2 * scale);
+                        const row = Math.floor(rows / 2 + y2 * scale);
 
                         if (col >= 0 && col < cols && row >= 0 && row < rows) {
                             const idx = col + row * cols;
                             if (scale > zBuffer[idx]) {
                                 zBuffer[idx] = scale;
                                 
-                                let br = scale * 2.0; 
+                                let br = scale * 2.0;
                                 if (audio > 0.5) br *= 1.6;
                                 if (cfg.type === 'petal' && progress > 0.8) br *= 1.8;
                                 br += Math.sin(time * 3 + idx * 0.1) * 0.3;
 
-                                let finalR = pdColor.r;
-                                let finalG = pdColor.g;
-                                let finalB = pdColor.b;
+                                let r = pdColor.r;
+                                let g = pdColor.g;
+                                let b = pdColor.b;
                                 
                                 const bgR = gridColors[idx*3];
                                 const bgG = gridColors[idx*3+1];
@@ -1571,23 +1567,22 @@ function Visualizer() {
 
                                 if (bgR > 10 || bgG > 10 || bgB > 10) {
                                     if (chaos > 0.7) {
-                                        finalR = Math.abs(finalR - bgR);
-                                        finalG = Math.abs(finalG - bgG);
-                                        finalB = Math.abs(finalB - bgB);
+                                        r = Math.abs(r - bgR);
+                                        g = Math.abs(g - bgG);
+                                        b = Math.abs(b - bgB);
                                     } else {
-                                        finalR = Math.min(255, finalR + bgR * 0.8);
-                                        finalG = Math.min(255, finalG + bgG * 0.8);
-                                        finalB = Math.min(255, finalB + bgB * 0.8);
+                                        r = Math.min(255, r + bgR * 0.8);
+                                        g = Math.min(255, g + bgG * 0.8);
+                                        b = Math.min(255, b + bgB * 0.8);
                                     }
                                 }
 
                                 gridChars[idx] = EMPTY_CHAR;
-                                
-                                gridColors[idx*3] = Math.min(255, finalR * br);
-                                gridColors[idx*3+1] = Math.min(255, finalG * br);
-                                gridColors[idx*3+2] = Math.min(255, finalB * br);
-                                gridMeta[idx] = 1; 
-                                gridGlow[idx] = (br > 1.0) ? Math.min(2.0, (br - 1.0) * 1.5) : 0;
+                                gridColors[idx*3] = Math.min(255, r * br);
+                                gridColors[idx*3+1] = Math.min(255, g * br);
+                                gridColors[idx*3+2] = Math.min(255, b * br);
+                                gridMeta[idx] = 1;
+                                gridGlow[idx] = br > 1.0 ? Math.min(2.0, (br - 1.0) * 1.5) : 0;
                             }
                         }
                     }

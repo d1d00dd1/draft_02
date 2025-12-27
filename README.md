@@ -1,24 +1,3 @@
-```
-空 空 空 空 空 空 空 空 空 空 空 空 空 空 空 空 空 空 空 空
+# audio-visual synthesizer
 
-╔═══════════════════════════════════════════════════════════════╗
-║  ⚠  ACCESS REQUIRED                                           ║
-╚═══════════════════════════════════════════════════════════════╝
-
-  • C@m3r@ p3rm1ss10n r3qu1r3d
-  • M1cr0ph0n3 acc3ss n33d3d
-  • W3bGL/WebRTC supp0rt r3qu1r3d
-  • M0d3rn br0ws3r r3qu1r3d
-
-╔═══════════════════════════════════════════════════════════════╗
-║  ⚡ QUICK START                                                ║
-╚═══════════════════════════════════════════════════════════════╝
-
-  1. Cl1ck t0 1n1t1@l1z3
-  2. @ll0w c@m3r@ @nd @ud10
-  3. Int3r@ct w1th h@nds
-  4. Exp3r13nc3 th3 v01d
-
-空 空 空 空 空 空 空 空 空 空 空 空 空 空 空 空 空 空 空 空
-
-```
+requires camera and microphone access

@@ -83,8 +83,8 @@ export class AudioEngine {
         }
 
         this.nextNoteTime = this.ctx.currentTime;
-        if (this.timerID === null) this.scheduler();
-        if (this.volumeRAF === null) this.volumeLoop();
+        if (!this.timerID) this.scheduler();
+        if (!this.volumeRAF) this.volumeLoop();
     }
 
 
@@ -94,35 +94,28 @@ export class AudioEngine {
 
     triggerModeSwitch() {
         if (!this.ctx) return;
-        const modes: ('deep' | 'glitch' | 'drive')[] = ['deep', 'glitch', 'drive'];
-        const currentIdx = modes.indexOf(this.blendMode);
-        const nextIdx = (currentIdx + 1) % modes.length;
-        this.blendMode = modes[nextIdx];
-        
+        const modes = ['deep', 'glitch', 'drive'];
+        const idx = modes.indexOf(this.blendMode);
+        this.blendMode = modes[(idx + 1) % modes.length] as any;
         this.regeneratePatterns();
-        
         const t = this.ctx.currentTime;
         this.triggerGlitch(t);
         this.triggerFMBass(t, 55, 1.0);
-        
-        console.log(`Switched to ${this.blendMode} mode`);
     }
 
     triggerInteraction() {
         if (!this.ctx) return;
         const now = this.ctx.currentTime;
-        
-        const reps = Math.floor(Math.random() * 12) + 6; 
-        const speed = (Math.random() * 0.04) + 0.008; 
+        const reps = Math.floor(Math.random() * 12) + 6;
+        const speed = Math.random() * 0.04 + 0.008;
         const panStart = Math.random() * 2 - 1;
         
-        for(let i=0; i<reps; i++) {
-             const t = now + (i * speed);
-             const pMod = (reps - i) * 500; 
-             const pan = panStart * ((i % 2 === 0) ? 1 : -1); 
-             
-             if (Math.random() > 0.6) this.triggerGlitch(t);
-             else this.triggerHat(t, 0.5, pan, pMod);
+        for(let i = 0; i < reps; i++) {
+            const t = now + i * speed;
+            const pMod = (reps - i) * 500;
+            const pan = panStart * (i % 2 === 0 ? 1 : -1);
+            if (Math.random() > 0.6) this.triggerGlitch(t);
+            else this.triggerHat(t, 0.5, pan, pMod);
         }
         
         this.tempo = this.baseTempo * (Math.random() > 0.5 ? 0.75 : 1.25);
@@ -242,7 +235,7 @@ export class AudioEngine {
             return;
         }
 
-        const lerp = (start: number, end: number, amt: number) => (1 - amt) * start + amt * end;
+        const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
         this.globalVolume = lerp(this.globalVolume, this.targetVolume, 0.05);
         this.masterGain.gain.setTargetAtTime(this.globalVolume, this.ctx.currentTime, 0.1);
 
@@ -251,19 +244,16 @@ export class AudioEngine {
         }
 
         if (this.filterNode) {
-            const baseFreq = 400;
-            const range = 8000;
-            const chaosFreq = Math.random() * 500 * this.chaos;
-            const targetFreq = baseFreq + (Math.pow(this.modY, 2) * range) + chaosFreq;
-            this.filterNode.frequency.setTargetAtTime(targetFreq, this.ctx.currentTime, 0.05);
-            this.filterNode.Q.value = 1 + (this.modX * 10) + (this.chaos * 15);
+            const freq = 400 + Math.pow(this.modY, 2) * 8000 + Math.random() * 500 * this.chaos;
+            this.filterNode.frequency.setTargetAtTime(freq, this.ctx.currentTime, 0.05);
+            this.filterNode.Q.value = 1 + this.modX * 10 + this.chaos * 15;
         }
 
         if (this.delayNode && this.feedbackGain) {
-            const baseDelay = 3 / 16 * (60 / this.tempo);
-            const warp = ((this.modX > 0.5) || (this.chaos > 0.5)) ? Math.random() * 0.05 : 0;
-            this.delayNode.delayTime.setTargetAtTime(baseDelay + warp, this.ctx.currentTime, 0.05);
-            this.feedbackGain.gain.value = 0.5 + (this.chaos * 0.4);
+            const delay = 3 / 16 * (60 / this.tempo);
+            const warp = (this.modX > 0.5 || this.chaos > 0.5) ? Math.random() * 0.05 : 0;
+            this.delayNode.delayTime.setTargetAtTime(delay + warp, this.ctx.currentTime, 0.05);
+            this.feedbackGain.gain.value = 0.5 + this.chaos * 0.4;
         }
 
         this.volumeRAF = requestAnimationFrame(() => this.volumeLoop());
@@ -314,20 +304,16 @@ export class AudioEngine {
             this.scheduleNote(this.current16thNote, this.nextNoteTime);
             
             const step16 = this.current16thNote % 16;
-            const swing = (step16 % 2 === 0) ? 0 : 0.015; 
-            const chaosDrift = (Math.random() - 0.5) * (this.chaos * 0.08); 
-            const drift = this.microTiming[step16] + chaosDrift;
+            const swing = step16 % 2 === 0 ? 0 : 0.015;
+            const drift = this.microTiming[step16] + (Math.random() - 0.5) * this.chaos * 0.08;
+            this.nextNoteTime += (60.0 / this.tempo) / 4.0 + swing + drift;
+            this.current16thNote++;
             
-            this.nextNoteTime += ((60.0 / this.tempo) / 4.0) + swing + drift;
-            
-                this.current16thNote++;
             if (this.current16thNote >= 64) {
                 this.current16thNote = 0;
                 this.measureCount++;
                 if (this.measureCount % 2 === 0) this.regeneratePatterns();
-                
                 if (this.chaos > 0.7 && Math.random() > 0.5) this.triggerModeSwitch();
-                
                 if (Math.random() > 0.6) {
                     this.tempo = this.baseTempo * (0.8 + Math.random() * 0.4);
                 }
@@ -347,11 +333,7 @@ export class AudioEngine {
         if (this.probabilityMask[step16] < probThreshold && !isGlitchMode && !isDriveMode) return; 
 
         if (this.kickPattern[step16] === 1) {
-            if (Math.random() < 0.15) {
-                this.triggerKick(time);
-            } else {
-                this.triggerKick(time);
-            }
+            this.triggerKick(time);
         }
 
         if (this.snarePattern[step16] === 1) {
@@ -415,8 +397,8 @@ export class AudioEngine {
         gain.gain.exponentialRampToValueAtTime(0.01, time + 0.4);
 
         const dist = this.ctx.createWaveShaper();
-        const distAmt = (this.blendMode === 'drive') ? 200 : 20;
-        dist.curve = this.makeDistortionCurve(distAmt + (this.chaos * 30));
+        const distAmt = this.blendMode === 'drive' ? 200 : 20;
+        dist.curve = this.makeDistortionCurve(distAmt + this.chaos * 30);
 
         osc.connect(gain);
         gain.connect(dist);
@@ -438,7 +420,7 @@ export class AudioEngine {
         const bufferSize = this.ctx.sampleRate * 0.15;
         const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
         const data = buffer.getChannelData(0);
-        for(let i=0; i<bufferSize; i++) data[i] = (Math.random() * 2 - 1);
+        for(let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
         noise.buffer = buffer;
         
         const filter = this.ctx.createBiquadFilter();
@@ -466,7 +448,7 @@ export class AudioEngine {
         
         const osc = this.ctx.createOscillator();
         osc.type = 'square';
-        osc.frequency.setValueAtTime((8000 + pitchMod) + Math.random()*1000, time);
+        osc.frequency.setValueAtTime(8000 + pitchMod + Math.random() * 1000, time);
         
         const filter = this.ctx.createBiquadFilter();
         filter.type = 'bandpass';
@@ -508,7 +490,7 @@ export class AudioEngine {
         modGain.connect(carrier.frequency);
         
         const dist = this.ctx.createWaveShaper();
-        dist.curve = this.makeDistortionCurve(10 + (intensity * 20));
+        dist.curve = this.makeDistortionCurve(10 + intensity * 20);
 
         outGain.gain.setValueAtTime(0.4, time);
         outGain.gain.exponentialRampToValueAtTime(0.001, time + 0.8);
@@ -601,12 +583,12 @@ export class AudioEngine {
             this.masterGain.gain.setTargetAtTime(0.0, this.ctx.currentTime, 0.05);
         }
 
-        if (this.timerID !== null) {
+        if (this.timerID) {
             clearTimeout(this.timerID);
             this.timerID = null;
         }
 
-        if (this.volumeRAF !== null) {
+        if (this.volumeRAF) {
             cancelAnimationFrame(this.volumeRAF);
             this.volumeRAF = null;
         }

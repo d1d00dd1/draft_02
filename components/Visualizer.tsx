@@ -24,6 +24,7 @@ function Visualizer() {
             let glitchOffset: Int16Array;
             let cachedRippleIntensity = 0;
             let rippleZones: Map<number, Set<number>> = new Map();
+            let nearestRippleCache: Int8Array | null = null; // Cache nearest ripple index per character (-1 = none)
             let maxRippleRadiusSq = 0;
             let handDistance = 0.5;
             let charVelX: Float32Array;
@@ -97,6 +98,8 @@ function Visualizer() {
             let handVelocityX = 0;
             let handVelocityY = 0;
             let gestureRippleCooldown = 0;
+            let lastClickTime = 0;
+            const CLICK_RATE_LIMIT = 200; // milliseconds between clicks (5 clicks per second max)
             let subBass = 0;
             let lowMid = 0;
             let highMid = 0;
@@ -138,6 +141,12 @@ function Visualizer() {
             };
 
             (p as any).touchStarted = () => {
+                const now = Date.now();
+                if (now - lastClickTime < CLICK_RATE_LIMIT) {
+                    return false; // Rate limited - ignore this click
+                }
+                lastClickTime = now;
+                
                 initCamera();
                 touchX = p.mouseX / p.width;
                 touchY = p.mouseY / p.height;
@@ -210,6 +219,12 @@ function Visualizer() {
             };
 
             p.mousePressed = () => {
+                const now = Date.now();
+                if (now - lastClickTime < CLICK_RATE_LIMIT) {
+                    return; // Rate limited - ignore this click
+                }
+                lastClickTime = now;
+                
                 initCamera();
                 touchX = p.mouseX / p.width;
                 touchY = p.mouseY / p.height;
@@ -279,6 +294,12 @@ function Visualizer() {
             };
 
             p.mouseClicked = () => {
+                const now = Date.now();
+                if (now - lastClickTime < CLICK_RATE_LIMIT) {
+                    return; // Rate limited - ignore this click
+                }
+                lastClickTime = now;
+                
                 initCamera();
                 if (audioEngine.ctx && audioEngine.ctx.state === 'suspended') {
                     audioEngine.ctx.resume();
@@ -376,6 +397,12 @@ function Visualizer() {
                 rippleZones.clear();
                 maxRippleRadiusSq = 0;
                 
+                // Initialize or resize cache
+                if (!nearestRippleCache || nearestRippleCache.length !== size) {
+                    nearestRippleCache = new Int8Array(size);
+                }
+                nearestRippleCache.fill(-1);
+                
                 for (let i = 0; i < ripples.length; i++) {
                     const ripple = ripples[i];
                     const maxRadius = ripple.radius * 3.5;
@@ -397,6 +424,16 @@ function Visualizer() {
                                 const distSq = (cellX - ripple.x) ** 2 + (cellY - ripple.y) ** 2;
                                 if (distSq < maxRadiusSq) {
                                     zone.add(idx);
+                                    // Cache nearest ripple - update if this is closer
+                                    if (nearestRippleCache[idx] === -1) {
+                                        nearestRippleCache[idx] = i;
+                                    } else {
+                                        const existingRipple = ripples[nearestRippleCache[idx]];
+                                        const existingDistSq = (cellX - existingRipple.x) ** 2 + (cellY - existingRipple.y) ** 2;
+                                        if (distSq < existingDistSq) {
+                                            nearestRippleCache[idx] = i;
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -861,7 +898,10 @@ function Visualizer() {
                         return ripple.life < ripple.maxLife && ripple.radius < p.width + p.height;
                     });
                     
-                    if (ripples.length !== prevRippleCount || ripples.length > 0) {
+                    // Only update ripple zones if ripple count changed or every 3 frames (reduce expensive calculations)
+                    const shouldUpdateZones = ripples.length !== prevRippleCount || 
+                        (ripples.length > 0 && p.frameCount % 3 === 0);
+                    if (shouldUpdateZones) {
                         updateRippleZones();
                         cachedRippleIntensity = -1;
                     }
@@ -1584,15 +1624,11 @@ function Visualizer() {
                             let x = charBaseX[i] + charVelX[i] + glitchOffset[i];
                             let y = charBaseY[i] + charVelY[i];
                             
-                            let inRippleZone = false;
-                            for (const [rippleIdx, zone] of rippleZones.entries()) {
-                                if (zone.has(i)) {
-                                    inRippleZone = true;
-                                    break;
-                                }
-                            }
+                            // Use cached nearest ripple index for O(1) lookup instead of O(n) loop
+                            const cachedRippleIdx = nearestRippleCache && nearestRippleCache[i] >= 0 ? nearestRippleCache[i] : -1;
+                            const nearestRipple = cachedRippleIdx >= 0 && cachedRippleIdx < ripples.length ? ripples[cachedRippleIdx] : null;
                             
-                            if (!inRippleZone) {
+                            if (!nearestRipple) {
                                 let r = gridColors[i*3];
                                 let g = gridColors[i*3+1];
                                 let b = gridColors[i*3+2];
@@ -1609,21 +1645,10 @@ function Visualizer() {
                                 continue;
                             }
                             
-                            let nearestRipple = null;
-                            let nearestDistSq = Infinity;
-                            
-                            for (let rippleIdx = 0; rippleIdx < ripples.length; rippleIdx++) {
-                                const ripple = ripples[rippleIdx];
-                                const dx = x - ripple.x;
-                                const dy = y - ripple.y;
-                                const distSq = dx * dx + dy * dy;
-                                const maxDistSq = (ripple.radius * 3) * (ripple.radius * 3);
-                                
-                                if (distSq < maxDistSq && distSq < nearestDistSq) {
-                                    nearestDistSq = distSq;
-                                    nearestRipple = ripple;
-                                }
-                            }
+                            // Calculate distance once for the cached nearest ripple
+                            const dx = x - nearestRipple.x;
+                            const dy = y - nearestRipple.y;
+                            const nearestDistSq = dx * dx + dy * dy;
                             
                             let rippleOffsetX = 0;
                             let rippleOffsetY = 0;
@@ -1631,40 +1656,36 @@ function Visualizer() {
                             let chromaticB = 0;
                             let blurAmount = 0;
                             
-                            if (nearestRipple) {
-                                const dist = Math.sqrt(nearestDistSq);
-                                const maxDist = nearestRipple.radius * 3.5;
-                                const edgeFadeStart = maxDist * 0.7;
+                            const dist = Math.sqrt(nearestDistSq);
+                            const maxDist = nearestRipple.radius * 3.5;
+                            const edgeFadeStart = maxDist * 0.7;
+                            
+                            if (dist < maxDist && dist > 0.1) {
+                                const angle = Math.atan2(dy, dx);
+                                const waveDist = dist - nearestRipple.radius;
                                 
-                                if (dist < maxDist && dist > 0.1) {
-                                    const dx = x - nearestRipple.x;
-                                    const dy = y - nearestRipple.y;
-                                    const angle = Math.atan2(dy, dx);
-                                    const waveDist = dist - nearestRipple.radius;
-                                    
-                                    const progress = nearestRipple.life / nearestRipple.maxLife;
-                                    const fade = Math.max(0, 1 - progress * 1.5);
-                                    const centerFade = dist < nearestRipple.radius ? (dist / nearestRipple.radius) : 1;
-                                    const edgeFade = dist > edgeFadeStart ? Math.max(0, 1 - (dist - edgeFadeStart) / (maxDist - edgeFadeStart)) : 1;
-                                    const combinedFade = fade * centerFade * edgeFade;
-                                    
-                                    const wildSpeed = 1.0 + (chaos * 0.8) + (kickVol * 0.6);
-                                    const primaryWave = Math.sin(waveDist * nearestRipple.frequency * 2 - nearestRipple.phase * wildSpeed) * nearestRipple.strength * combinedFade;
-                                    const secondaryWave = Math.sin(waveDist * nearestRipple.frequency * 4 - nearestRipple.phase * 2.5 * wildSpeed) * nearestRipple.strength * 0.5 * combinedFade;
-                                    const radialWave = Math.sin(dist * 0.3 + globalTime * 5 * wildSpeed + nearestRipple.phase) * nearestRipple.amplitude * 0.15 * combinedFade;
-                                    
-                                    const totalWave = (primaryWave + secondaryWave + radialWave) * fade;
-                                    
-                                    rippleOffsetX = Math.cos(angle) * totalWave * 30 * wildSpeed;
-                                    rippleOffsetY = Math.sin(angle) * totalWave * 30 * wildSpeed;
-                                    
-                                    const chromaticIntensity = Math.abs(totalWave) * 0.25;
-                                    const rippleColorShift = Math.sin(dist * 0.15 + nearestRipple.phase) * chromaticIntensity;
-                                    chromaticR = rippleColorShift * 12;
-                                    chromaticB = -rippleColorShift * 12;
-                                    
-                                    blurAmount = Math.abs(totalWave) * fade * 0.6;
-                                }
+                                const progress = nearestRipple.life / nearestRipple.maxLife;
+                                const fade = Math.max(0, 1 - progress * 1.5);
+                                const centerFade = dist < nearestRipple.radius ? (dist / nearestRipple.radius) : 1;
+                                const edgeFade = dist > edgeFadeStart ? Math.max(0, 1 - (dist - edgeFadeStart) / (maxDist - edgeFadeStart)) : 1;
+                                const combinedFade = fade * centerFade * edgeFade;
+                                
+                                const wildSpeed = 1.0 + (chaos * 0.8) + (kickVol * 0.6);
+                                const primaryWave = Math.sin(waveDist * nearestRipple.frequency * 2 - nearestRipple.phase * wildSpeed) * nearestRipple.strength * combinedFade;
+                                const secondaryWave = Math.sin(waveDist * nearestRipple.frequency * 4 - nearestRipple.phase * 2.5 * wildSpeed) * nearestRipple.strength * 0.5 * combinedFade;
+                                const radialWave = Math.sin(dist * 0.3 + globalTime * 5 * wildSpeed + nearestRipple.phase) * nearestRipple.amplitude * 0.15 * combinedFade;
+                                
+                                const totalWave = (primaryWave + secondaryWave + radialWave) * fade;
+                                
+                                rippleOffsetX = Math.cos(angle) * totalWave * 30 * wildSpeed;
+                                rippleOffsetY = Math.sin(angle) * totalWave * 30 * wildSpeed;
+                                
+                                const chromaticIntensity = Math.abs(totalWave) * 0.25;
+                                const rippleColorShift = Math.sin(dist * 0.15 + nearestRipple.phase) * chromaticIntensity;
+                                chromaticR = rippleColorShift * 12;
+                                chromaticB = -rippleColorShift * 12;
+                                
+                                blurAmount = Math.abs(totalWave) * fade * 0.6;
                             }
                         
                         x += rippleOffsetX * 0.4;

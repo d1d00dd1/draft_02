@@ -1,0 +1,7 @@
+{
+  "name": "draft_02",
+  "description": "A generative audio-visual experience featuring irregular IDM rhythms, layered synthesis, and reactive ASCII lotus visuals. Touch to glitch.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

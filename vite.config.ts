@@ -8,6 +8,14 @@ export default defineConfig(({ mode }) => {
     
     return {
       base,
+      build: {
+        outDir: 'dist',
+        assetsDir: 'assets',
+        sourcemap: false,
+        rollupOptions: {
+          input: path.resolve(__dirname, 'index.html'),
+        },
+      },
       server: {
         port: 5173,
         host: '0.0.0.0',

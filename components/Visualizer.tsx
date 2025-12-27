@@ -83,6 +83,24 @@ function Visualizer() {
             let detectedFingers = 0;
             let lastFingerCount = 0;
             let fingerCountStable = 0;
+            let lastPinchDistance = Infinity;
+            let pinchCooldown = 0;
+            let lastPinchClusters: Array<{x: number, y: number}> = [];
+            let screenShakeX = 0;
+            let screenShakeY = 0;
+            let chromaticAberration = 0;
+            let vignetteIntensity = 0;
+            let scanlinePhase = 0;
+            let screenPulse = 1.0;
+            let lastHandX = 0.5;
+            let lastHandY = 0.5;
+            let handVelocityX = 0;
+            let handVelocityY = 0;
+            let gestureRippleCooldown = 0;
+            let subBass = 0;
+            let lowMid = 0;
+            let highMid = 0;
+            let treble = 0;
             
             const initCamera = async () => {
                 if (cameraInitialized) return;
@@ -452,6 +470,55 @@ function Visualizer() {
                 return fingerEstimate;
             }
 
+            function detectPinch(clusters: Array<{x: number, y: number, points: number}>, w: number, h: number): {x: number, y: number} | null {
+                if (clusters.length < 2) {
+                    lastPinchClusters = [];
+                    lastPinchDistance = Infinity;
+                    return null;
+                }
+                
+                const significantClusters = clusters.filter(c => c.points >= 2).slice(0, 2);
+                if (significantClusters.length < 2) {
+                    lastPinchClusters = [];
+                    lastPinchDistance = Infinity;
+                    return null;
+                }
+                
+                const c1 = significantClusters[0];
+                const c2 = significantClusters[1];
+                const currentDist = Math.sqrt((c1.x - c2.x) ** 2 + (c1.y - c2.y) ** 2);
+                
+                if (lastPinchClusters.length === 2) {
+                    const prevDist = Math.sqrt(
+                        (lastPinchClusters[0].x - lastPinchClusters[1].x) ** 2 + 
+                        (lastPinchClusters[0].y - lastPinchClusters[1].y) ** 2
+                    );
+                    
+                    const pinchThreshold = 40;
+                    const minDistance = 20;
+                    
+                    if (currentDist < pinchThreshold && 
+                        currentDist < prevDist && 
+                        prevDist - currentDist > 8 &&
+                        currentDist > minDistance &&
+                        pinchCooldown <= 0) {
+                        
+                        const centerX = ((c1.x + c2.x) / 2) / w * p.width;
+                        const centerY = ((c1.y + c2.y) / 2) / h * p.height;
+                        
+                        lastPinchDistance = currentDist;
+                        pinchCooldown = 30;
+                        
+                        return { x: centerX, y: centerY };
+                    }
+                }
+                
+                lastPinchClusters = significantClusters.map(c => ({ x: c.x, y: c.y }));
+                lastPinchDistance = currentDist;
+                
+                return null;
+            }
+
             function processMotion() {
                 if (!capture || !capture.width) return;
 
@@ -517,6 +584,55 @@ function Visualizer() {
                     if (fingerCountStable > 3) {
                         detectedFingers = fingerCount;
                     }
+                    
+                    const clusters: Array<{x: number, y: number, points: number}> = [];
+                    const clusterRadius = 15;
+                    for (const point of motionPoints) {
+                        let foundCluster = false;
+                        for (const cluster of clusters) {
+                            const dist = Math.sqrt((point.x - cluster.x) ** 2 + (point.y - cluster.y) ** 2);
+                            if (dist < clusterRadius) {
+                                cluster.x = (cluster.x * cluster.points + point.x) / (cluster.points + 1);
+                                cluster.y = (cluster.y * cluster.points + point.y) / (cluster.points + 1);
+                                cluster.points++;
+                                foundCluster = true;
+                                break;
+                            }
+                        }
+                        if (!foundCluster) {
+                            clusters.push({ x: point.x, y: point.y, points: 1 });
+                        }
+                    }
+                    
+                    const pinchPoint = detectPinch(clusters, w, h);
+                    if (pinchPoint) {
+                        if (ripples.length >= 3) {
+                            ripples.sort((a, b) => a.life - b.life);
+                            ripples.shift();
+                        }
+                        
+                        ripples.push({
+                            x: pinchPoint.x,
+                            y: pinchPoint.y,
+                            radius: 30,
+                            life: 0,
+                            maxLife: 50 + Math.random() * 15,
+                            strength: 1.4 + Math.random() * 0.4,
+                            velocity: 12 + Math.random() * 6,
+                            amplitude: 12 + Math.random() * 8,
+                            phase: Math.random() * Math.PI * 2,
+                            frequency: 0.25 + Math.random() * 0.15,
+                            interference: Math.random() * 0.5
+                        });
+                        updateRippleZones();
+                        cachedRippleIntensity = -1;
+                        
+                        audioEngine.triggerInteraction();
+                        updateGlitchMap(true);
+                        audioEngine.setChaos(1.0);
+                    }
+                    
+                    if (pinchCooldown > 0) pinchCooldown--;
 
                     const motionRatio = totalMotion / ((w * h) / sampleStep); 
                     
@@ -535,6 +651,16 @@ function Visualizer() {
                         const motionIntensity = Math.min(1, motionRatio * 3);
                         handDistance = p.lerp(handDistance, 1 - motionIntensity, 0.15);
 
+                        const currentHandX = (sumMotionX / totalMotion) / w;
+                        const currentHandY = (sumMotionY / totalMotion) / h;
+                        const normalizedHandX = 0.5 + currentHandX;
+                        const normalizedHandY = 0.5 + currentHandY;
+                        
+                        handVelocityX = normalizedHandX - lastHandX;
+                        handVelocityY = normalizedHandY - lastHandY;
+                        lastHandX = normalizedHandX;
+                        lastHandY = normalizedHandY;
+                        
                         if (leftCount > 5) {
                             leftHandActive = true;
                             leftHandY = p.lerp(leftHandY, 1 - ((leftMotionY/leftCount)/h), 0.2);
@@ -634,14 +760,48 @@ function Visualizer() {
                     if (audioEngine.isSetup && audioEngine.analyser && audioEngine.ctx) {
                         const data = new Uint8Array(audioEngine.analyser.frequencyBinCount);
                         audioEngine.analyser.getByteFrequencyData(data);
+                        subBass = (data[0] + data[1] + data[2]) / 3 / 255.0;
                         bass = data[2] / 255.0; 
                         kickVol = (data[2] + data[4] + data[6]) / 3 / 255.0;
+                        lowMid = (data[15] + data[20] + data[25]) / 3 / 255.0;
                         mid = data[40] / 255.0; 
+                        highMid = (data[60] + data[80]) / 2 / 255.0;
                         high = data[100] / 255.0; 
+                        treble = (data[120] + data[150] + data[180]) / 3 / 255.0;
                         globalTime = audioEngine.ctx.currentTime;
                     } else {
                         globalTime = p.millis() / 1000;
                     }
+                    
+                    const handSpeed = Math.sqrt(handVelocityX * handVelocityX + handVelocityY * handVelocityY);
+                    if (handSpeed > 0.15 && gestureRippleCooldown <= 0) {
+                        const rippleX = lastHandX * p.width;
+                        const rippleY = lastHandY * p.height;
+                        
+                        if (ripples.length >= 3) {
+                            ripples.sort((a, b) => a.life - b.life);
+                            ripples.shift();
+                        }
+                        
+                        ripples.push({
+                            x: rippleX,
+                            y: rippleY,
+                            radius: 25 + handSpeed * 20,
+                            life: 0,
+                            maxLife: 45 + handSpeed * 20,
+                            strength: 1.0 + handSpeed * 0.8 + kickVol * 0.4,
+                            velocity: 8 + handSpeed * 8 + kickVol * 5,
+                            amplitude: 8 + handSpeed * 6 + bass * 4,
+                            phase: Math.random() * Math.PI * 2,
+                            frequency: 0.2 + handSpeed * 0.2,
+                            interference: Math.random() * 0.5
+                        });
+                        updateRippleZones();
+                        cachedRippleIntensity = -1;
+                        gestureRippleCooldown = 15;
+                    }
+                    
+                    if (gestureRippleCooldown > 0) gestureRippleCooldown--;
 
                     effectTimer++;
                     if (effectTimer > 30 + Math.random() * 120) {
@@ -652,6 +812,14 @@ function Visualizer() {
                     }
                     
                     colorShift = p.lerp(colorShift, colorShiftTarget, 0.05);
+                    
+                    const shakeIntensity = subBass * 4 + kickVol * 2 + chaos;
+                    screenShakeX = p.lerp(screenShakeX, (shakeIntensity > 0.7 ? (Math.random() - 0.5) * shakeIntensity * 3 : 0), 0.3);
+                    screenShakeY = p.lerp(screenShakeY, (shakeIntensity > 0.7 ? (Math.random() - 0.5) * shakeIntensity * 3 : 0), 0.3);
+                    chromaticAberration = p.lerp(chromaticAberration, (kickVol + highMid + chaos) * 1.8, 0.1);
+                    vignetteIntensity = p.lerp(vignetteIntensity, 0.3 + (subBass * 0.3) + (kickVol * 0.2) + (chaos * 0.3), 0.05);
+                    scanlinePhase += 0.5 + treble * 0.3;
+                    screenPulse = p.lerp(screenPulse, 1.0 + (subBass * 0.03) + (kickVol > 0.6 ? 0.02 : 0), 0.1);
 
                     if (stutterActive) {
                         stutterDuration--;
@@ -711,6 +879,11 @@ function Visualizer() {
                         }
                         
                         p.background(0);
+                        
+                        p.push();
+                        p.translate(p.width / 2, p.height / 2);
+                        p.scale(screenPulse);
+                        p.translate(-p.width / 2 + screenShakeX, -p.height / 2 + screenShakeY);
                         
                         if (leftHandActive) {
                             targetRotY = (leftHandY - 0.5) * 4;
@@ -1510,10 +1683,17 @@ function Visualizer() {
                         const isLotus = gridMeta[i] === 1;
 
                         if (!isLotus) {
-                            r *= (0.8 + mid);
-                            g *= (0.8 + mid);
-                            b *= (0.8 + mid);
+                            const audioReactive = 0.7 + (subBass * 0.15) + (lowMid * 0.1) + (highMid * 0.05) + (treble * 0.05);
+                            r *= audioReactive;
+                            g *= audioReactive;
+                            b *= audioReactive;
                         }
+                        
+                        const bassBoost = subBass * 30;
+                        const trebleBoost = treble * 20;
+                        r = Math.min(255, r + bassBoost);
+                        g = Math.min(255, g + lowMid * 15);
+                        b = Math.min(255, b + trebleBoost);
 
                         if (colorShift !== 0) {
                             const shift = colorShift * 50;
@@ -1559,9 +1739,43 @@ function Visualizer() {
                         }
                         
                         const alpha = isLotus ? 255 : Math.min(255, (chaos > 0.5) ? 200 : 240);
-                        p.fill(Math.floor(r), Math.floor(g), Math.floor(b), Math.floor(alpha));
-                        p.text(char, x, y);
+                        
+                        if (chromaticAberration > 0.5) {
+                            const caOffset = chromaticAberration * 2;
+                            p.fill(Math.floor(r), Math.floor(g), Math.floor(b), Math.floor(alpha));
+                            p.text(char, x - caOffset, y);
+                            p.fill(Math.floor(r * 0.3), Math.floor(g), Math.floor(b * 0.3), Math.floor(alpha * 0.6));
+                            p.text(char, x, y);
+                            p.fill(Math.floor(r * 0.3), Math.floor(g * 0.3), Math.floor(b), Math.floor(alpha * 0.6));
+                            p.text(char, x + caOffset, y);
+                        } else {
+                            p.fill(Math.floor(r), Math.floor(g), Math.floor(b), Math.floor(alpha));
+                            p.text(char, x, y);
                         }
+                        }
+                    }
+                    
+                    p.pop();
+                    
+                    if (vignetteIntensity > 0.1) {
+                        const ctx = p.drawingContext as CanvasRenderingContext2D;
+                        const gradient = ctx.createRadialGradient(p.width / 2, p.height / 2, 0, p.width / 2, p.height / 2, Math.max(p.width, p.height) * 0.7);
+                        gradient.addColorStop(0, `rgba(0,0,0,0)`);
+                        gradient.addColorStop(0.7, `rgba(0,0,0,0)`);
+                        gradient.addColorStop(1, `rgba(0,0,0,${vignetteIntensity * 60})`);
+                        ctx.fillStyle = gradient;
+                        ctx.fillRect(0, 0, p.width, p.height);
+                    }
+                    
+                    if (scanlinePhase > 0 && kickVol > 0.3) {
+                        p.push();
+                        p.stroke(0, 0, 0, 15 + kickVol * 20);
+                        p.strokeWeight(1);
+                        for (let y = 0; y < p.height; y += 4) {
+                            const offset = Math.sin((y + scanlinePhase) * 0.1) * 2;
+                            p.line(0, y + offset, p.width, y + offset);
+                        }
+                        p.pop();
                     }
                 } catch(e) { }
             };

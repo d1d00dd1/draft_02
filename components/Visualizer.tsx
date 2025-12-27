@@ -7,17 +7,33 @@ const Visualizer: React.FC = () => {
     const p5Instance = useRef<p5 | null>(null);
 
     useEffect(() => {
-        if (!containerRef.current) return;
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/2f539a89-c611-48c4-abc8-28e976db483b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Visualizer.tsx:9',message:'Visualizer useEffect entry',data:{hasContainerRef:!!containerRef,containerRefCurrent:!!containerRef.current,hasP5:!!p5},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+        // #endregion
+
+        if (!containerRef.current) {
+            // #region agent log
+            fetch('http://127.0.0.1:7243/ingest/2f539a89-c611-48c4-abc8-28e976db483b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Visualizer.tsx:12',message:'ERROR: containerRef.current is null',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+            // #endregion
+            return;
+        }
+
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/2f539a89-c611-48c4-abc8-28e976db483b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Visualizer.tsx:17',message:'Before sketch function definition',data:{hasP5:!!p5,hasCreateCanvas:!!p5.prototype.createCanvas},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+        // #endregion
 
         const sketch = (p: p5) => {
+            // #region agent log
+            fetch('http://127.0.0.1:7243/ingest/2f539a89-c611-48c4-abc8-28e976db483b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Visualizer.tsx:21',message:'p5 sketch function entry',data:{hasP:!!p,hasWindowWidth:!!p.windowWidth},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+            // #endregion
             const fontSize = 20;
             let cols: number, rows: number, size: number;
-
+            
             let zBuffer: Float32Array;
             let gridChars: string[];
-            let gridColors: Uint8ClampedArray;
+            let gridColors: Uint8ClampedArray; 
             let gridMeta: Uint8Array;
-            let gridGlow: Float32Array;
+            let gridGlow: Float32Array;     
             let floatingAscii: Array<{x: number, y: number, char: string, life: number, vx: number, vy: number}> = [];
             let floatingPetals: Array<{x: number, y: number, size: number, angle: number, vx: number, vy: number, va: number, life: number, color: {r: number, g: number, b: number}}> = [];
             let ripples: Array<{x: number, y: number, radius: number, life: number, maxLife: number, strength: number, velocity: number, amplitude: number, phase: number, frequency: number, interference: number}> = [];
@@ -50,15 +66,15 @@ const Visualizer: React.FC = () => {
 
             let capture: p5.Element;
             let prevPixels: Uint8ClampedArray | null = null;
-            let motionThreshold = 30;
+            let motionThreshold = 30; 
             let lastMotionTime = 0;
-            let flowX = 0;
-            let flowY = 0;
-            let shakeAccumulator = 0;
+            let flowX = 0; 
+            let flowY = 0; 
+            let shakeAccumulator = 0; 
             let lastFlowX = 0;
             let zoomLevel = 1.0;
             let targetZoom = 1.0;
-            let glitchRows: Int16Array;
+            let glitchRows: Int16Array; 
             let glitchUpdateTimer = 0;
             let viewportDriftX = 0;
             let viewportDriftY = 0;
@@ -93,13 +109,26 @@ const Visualizer: React.FC = () => {
             };
             
             p.setup = () => {
+                // #region agent log
+                fetch('http://127.0.0.1:7243/ingest/2f539a89-c611-48c4-abc8-28e976db483b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Visualizer.tsx:111',message:'p.setup entry',data:{windowWidth:p.windowWidth,windowHeight:p.windowHeight,hasCreateCanvas:!!p.createCanvas},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                // #endregion
+
                 p.createCanvas(p.windowWidth, p.windowHeight);
+
+                // #region agent log
+                fetch('http://127.0.0.1:7243/ingest/2f539a89-c611-48c4-abc8-28e976db483b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Visualizer.tsx:115',message:'After createCanvas',data:{hasCanvas:!!p.canvas,canvasWidth:p.canvas?.width,canvasHeight:p.canvas?.height},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                // #endregion
+
                 (p.drawingContext as CanvasRenderingContext2D).font = `bold ${fontSize}px "Space Mono", monospace`;
                 p.textAlign(p.CENTER, p.CENTER);
                 p.noStroke();
                 p.frameRate(24);
 
                 calculateGrid();
+
+                // #region agent log
+                fetch('http://127.0.0.1:7243/ingest/2f539a89-c611-48c4-abc8-28e976db483b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Visualizer.tsx:125',message:'p.setup completed',data:{cols,rows,size},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                // #endregion
 
                 blurBuffer = p.createGraphics(p.width, p.height);
                 bloomBuffer = p.createGraphics(p.width, p.height);
@@ -256,9 +285,9 @@ const Visualizer: React.FC = () => {
 
             const calculateGrid = () => {
                 cols = Math.floor(p.width / fontSize) + 1;
-                rows = Math.floor(p.height / (fontSize * 0.65)) + 1;
+                rows = Math.floor(p.height / (fontSize * 0.65)) + 1; 
                 size = cols * rows;
-
+                
                 zBuffer = new Float32Array(size);
                 gridChars = new Array(size).fill("");
                 gridColors = new Uint8ClampedArray(size * 3);
@@ -276,7 +305,7 @@ const Visualizer: React.FC = () => {
                     charBaseX[i] = (i % cols) * fontSize;
                     charBaseY[i] = Math.floor(i / cols) * (fontSize * 0.65);
                 }
-
+                
                 glitchRows = new Int16Array(rows).fill(0);
             };
 
@@ -299,7 +328,7 @@ const Visualizer: React.FC = () => {
                         glitchRows[r] = offset;
                     }
                 }
-
+                
                 if (Math.random() > 0.4) {
                     blockGlitch = {
                         x: Math.floor(Math.random() * cols),
@@ -319,10 +348,10 @@ const Visualizer: React.FC = () => {
 
                 motionFrameSkip++;
                 if (motionFrameSkip % 6 !== 0) return;
-
+                
                 try {
                     (capture as any).loadPixels();
-                    const currentPixels = (capture as any).pixels;
+                    const currentPixels = (capture as any).pixels; 
                     if (!currentPixels || currentPixels.length === 0) return;
 
                     if (!prevPixels || prevPixels.length !== currentPixels.length) {
@@ -332,7 +361,7 @@ const Visualizer: React.FC = () => {
 
                     const w = capture.width;
                     const h = capture.height;
-
+                    
                     let totalMotion = 0;
                     let sumMotionX = 0;
                     let sumMotionY = 0;
@@ -340,18 +369,18 @@ const Visualizer: React.FC = () => {
                     let rightMotionY = 0, rightCount = 0;
 
                     const sampleStep = 48;
-
-                    for (let i = 0; i < currentPixels.length; i += 4 * sampleStep) {
-                        const bright = currentPixels[i];
+                    
+                    for (let i = 0; i < currentPixels.length; i += 4 * sampleStep) { 
+                        const bright = currentPixels[i]; 
                         const prevBright = prevPixels[i];
-
+                        
                         if (Math.abs(bright - prevBright) > motionThreshold) {
                             totalMotion++;
                             const pixelIdx = i / 4;
                             const x = pixelIdx % w;
                             const y = Math.floor(pixelIdx / w);
 
-                            sumMotionX += (x - w/2);
+                            sumMotionX += (x - w/2); 
                             sumMotionY += (y - h/2);
 
                             if (x < w / 2) {
@@ -362,13 +391,13 @@ const Visualizer: React.FC = () => {
                                 rightCount++;
                             }
                         }
-                        prevPixels[i] = bright;
+                        prevPixels[i] = bright; 
                     }
 
-                    const motionRatio = totalMotion / ((w * h) / sampleStep);
-
+                    const motionRatio = totalMotion / ((w * h) / sampleStep); 
+                    
                     if (totalMotion > 5) {
-                        const avgX = (sumMotionX / totalMotion) / (w/2);
+                        const avgX = (sumMotionX / totalMotion) / (w/2); 
                         const avgY = (sumMotionY / totalMotion) / (h/2); 
                         
                         flowX = p.lerp(flowX, avgX, 0.3);
@@ -395,14 +424,14 @@ const Visualizer: React.FC = () => {
                         if (leftHandActive || rightHandActive) {
                             targetZoom = p.map(handDistance, 0, 1, 0.3, 3.0);
                         } else {
-                            targetZoom = 1.0;
+                             targetZoom = 1.0;
                             handDistance = p.lerp(handDistance, 0.5, 0.1);
                         }
 
                         lastMotionTime = p.millis();
                         audioEngine.setPresence(true);
-
-                        const chaosLevel = Math.min(1, motionRatio * 5);
+                        
+                        const chaosLevel = Math.min(1, motionRatio * 5); 
                         audioEngine.setChaos(chaosLevel);
 
                     } else {
@@ -410,8 +439,8 @@ const Visualizer: React.FC = () => {
                         flowY = p.lerp(flowY, 0, 0.1);
                         targetZoom = 1.0;
                         shakeAccumulator = Math.max(0, shakeAccumulator - 0.2);
-
-                        if (p.millis() - lastMotionTime > 800) {
+                        
+                        if (p.millis() - lastMotionTime > 800) { 
                             audioEngine.setPresence(false);
                             audioEngine.setChaos(0);
                         }
@@ -420,7 +449,7 @@ const Visualizer: React.FC = () => {
                     if (shakeAccumulator > 2.5) {
                         shakeAccumulator = 0;
                         audioEngine.triggerModeSwitch();
-                        invertFrame = !invertFrame;
+                        invertFrame = !invertFrame; 
                         updateGlitchMap(true);
                     }
 
@@ -464,14 +493,14 @@ const Visualizer: React.FC = () => {
                     let bass = 0, mid = 0, high = 0;
                     let kickVol = 0;
                     let globalTime = 0;
-
+                    
                     if (audioEngine.isSetup && audioEngine.analyser && audioEngine.ctx) {
                         const data = new Uint8Array(audioEngine.analyser.frequencyBinCount);
                         audioEngine.analyser.getByteFrequencyData(data);
-                        bass = data[2] / 255.0;
+                        bass = data[2] / 255.0; 
                         kickVol = (data[2] + data[4] + data[6]) / 3 / 255.0;
-                        mid = data[40] / 255.0;
-                        high = data[100] / 255.0;
+                        mid = data[40] / 255.0; 
+                        high = data[100] / 255.0; 
                         globalTime = audioEngine.ctx.currentTime;
                     } else {
                         globalTime = p.millis() / 1000;
@@ -542,7 +571,7 @@ const Visualizer: React.FC = () => {
                     if (!stutterActive) {
                         processMotion();
                         p.background(0);
-
+                        
                         if (leftHandActive) {
                             targetRotY = (leftHandY - 0.5) * 4;
                         } else {
@@ -633,14 +662,14 @@ const Visualizer: React.FC = () => {
                         const sy = Math.sin(rotY + (mid * 0.5));
 
                         zBuffer.fill(-10000);
-
+                        
                         if (kickVol > 0.5 || mid > 0.6) updateGlitchMap(false);
-
+                        
                         viewportDriftX += (Math.random() - 0.5) * (bass * 20);
                         viewportDriftY += (Math.random() - 0.5) * (bass * 20);
-
+                        
                         let hasFeed = false;
-
+                        
                         if (capture && capture.width > 0) {
                             const pixels = (capture as any).pixels;
                             const capW = capture.width;
@@ -797,8 +826,8 @@ const Visualizer: React.FC = () => {
                                         } else {
                                             gridChars[i] = "";
                                             if (i + 1 < cols * rows) gridChars[i + 1] = "";
-                                            gridMeta[i] = 0;
-                                            gridGlow[i] = 0;
+                                        gridMeta[i] = 0;
+                                        gridGlow[i] = 0;
                                             if (i + 1 < cols * rows) {
                                                 gridMeta[i + 1] = 0;
                                                 gridGlow[i + 1] = 0;
@@ -997,7 +1026,7 @@ const Visualizer: React.FC = () => {
                     const ctx = p.drawingContext as CanvasRenderingContext2D;
                     
                     ctx.shadowBlur = 0;
-                    
+
                     for (const petal of floatingPetals) {
                         const alpha = (petal.life / 300) * 180;
                         p.push();
@@ -1193,33 +1222,33 @@ const Visualizer: React.FC = () => {
                             let x = (i % cols) * fontSize;
                             let y = Math.floor(i / cols) * (fontSize * 0.65);
                             x += glitchOffset[i] || 0;
-                            
-                            let r = gridColors[i*3];
-                            let g = gridColors[i*3+1];
-                            let b = gridColors[i*3+2];
-                            
-                            const isLotus = gridMeta[i] === 1;
-                            if (!isLotus) {
-                                r *= (0.8 + mid);
-                                g *= (0.8 + mid);
-                                b *= (0.8 + mid);
-                            }
-                            
-                            if (invertFrame) {
-                                r = 255 - r;
-                                g = 255 - g;
-                                b = 255 - b;
-                            }
-                            
+
+                        let r = gridColors[i*3];
+                        let g = gridColors[i*3+1];
+                        let b = gridColors[i*3+2];
+
+                        const isLotus = gridMeta[i] === 1;
+                        if (!isLotus) {
+                            r *= (0.8 + mid);
+                            g *= (0.8 + mid);
+                            b *= (0.8 + mid);
+                        }
+
+                        if (invertFrame) {
+                            r = 255 - r;
+                            g = 255 - g;
+                            b = 255 - b;
+                        }
+
                             const ctx = p.drawingContext as CanvasRenderingContext2D;
-                            if (isLotus) {
-                                const glow = gridGlow[i];
+                        if (isLotus) {
+                            const glow = gridGlow[i];
                                 ctx.shadowBlur = Math.max(0, glow * 25 + 8);
                                 ctx.shadowColor = `rgba(${Math.floor(r)},${Math.floor(g)},${Math.floor(b)},0.8)`;
                                 p.fill(Math.floor(r), Math.floor(g), Math.floor(b), 255);
-                            } else {
+                        } else {
                                 const baseAlpha = Math.min(255, (chaos > 0.5) ? 180 : 240);
-                                ctx.shadowBlur = 0;
+                            ctx.shadowBlur = 0;
                                 p.fill(Math.floor(r), Math.floor(g), Math.floor(b), Math.floor(baseAlpha));
                             }
                             p.text(char, x, y);
@@ -1630,7 +1659,22 @@ const Visualizer: React.FC = () => {
             }
         };
 
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/2f539a89-c611-48c4-abc8-28e976db483b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Visualizer.tsx:1648',message:'Before new p5()',data:{hasContainerRef:!!containerRef.current,hasSketch:!!sketch},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+        // #endregion
+
+        try {
         p5Instance.current = new p5(sketch, containerRef.current);
+
+            // #region agent log
+            fetch('http://127.0.0.1:7243/ingest/2f539a89-c611-48c4-abc8-28e976db483b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Visualizer.tsx:1653',message:'After new p5() - p5 instance created',data:{hasP5Instance:!!p5Instance.current},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+            // #endregion
+        } catch (err) {
+            // #region agent log
+            fetch('http://127.0.0.1:7243/ingest/2f539a89-c611-48c4-abc8-28e976db483b',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Visualizer.tsx:1657',message:'ERROR creating p5 instance',data:{error:err instanceof Error?err.message:String(err),errorName:err instanceof Error?err.name:'unknown'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+            // #endregion
+        }
+
         return () => {
              if (p5Instance.current) {
                  const videos = document.querySelectorAll('video');

@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
-    <title>Aphex Lotus IDM</title>
+    <title>draft_02</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
     <style>
@@ -21,19 +21,14 @@
         background: transparent;
       }
     </style>
-  <script type="importmap">
-{
-  "imports": {
-    "react-dom/": "https://esm.sh/react-dom@18.3.1/",
-    "react": "https://esm.sh/react@18.3.1",
-    "react/": "https://esm.sh/react@18.3.1/",
-    "p5": "https://esm.sh/p5@1.9.0"
-  }
-}
-</script>
 </head>
   <body>
     <div id="root"></div>
+    <script type="module">
+      // #region agent log
+      console.log('[DEBUG-HTML] HTML script executing', { timestamp: Date.now(), hasRoot: !!document.getElementById('root') });
+      // #endregion
+    </script>
   <script type="module" src="./index.tsx"></script>
 </body>
 </html>

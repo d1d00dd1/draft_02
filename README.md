@@ -1,3 +1,3 @@
 audio visual synthesizer
 
-requires camera and microphone
+requires camera access

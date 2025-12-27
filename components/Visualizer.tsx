@@ -33,18 +33,18 @@ function Visualizer() {
             let charBaseX: Float32Array;
             let charBaseY: Float32Array;
             let physicsParticles: any[] = [];
+            let videoColors: Array<{r: number, g: number, b: number}> = [];
+            let videoColorUpdateTimer = 0;
 
             const EMPTY_CHAR = "空";
 
-            const colors = [
-                { r: 135, g: 206, b: 250 },
-                { r: 176, g: 224, b: 230 },
-                { r: 173, g: 216, b: 230 },
-                { r: 175, g: 238, b: 238 },
-                { r: 144, g: 238, b: 144 },
-                { r: 152, g: 251, b: 152 },
-                { r: 176, g: 196, b: 222 },
-                { r: 176, g: 224, b: 230 }
+            const baseColors = [
+                { r: 180, g: 200, b: 255 },
+                { r: 200, g: 180, b: 255 },
+                { r: 255, g: 200, b: 220 },
+                { r: 220, g: 255, b: 200 },
+                { r: 200, g: 255, b: 255 },
+                { r: 255, g: 220, b: 200 }
             ];
 
             let capture: p5.Element;
@@ -298,27 +298,88 @@ function Visualizer() {
                 glitchRows = new Int16Array(rows).fill(0);
             };
 
+            function extractVideoColors() {
+                if (!capture || !capture.width) return;
+                
+                try {
+                    (capture as any).loadPixels();
+                    const pixels = (capture as any).pixels;
+                    if (!pixels || pixels.length === 0) return;
+                    
+                    const w = capture.width;
+                    const h = capture.height;
+                    const sampleSize = 8;
+                    const colorBuckets: Map<string, {r: number, g: number, b: number, count: number}> = new Map();
+                    
+                    for (let y = 0; y < h; y += sampleSize) {
+                        for (let x = 0; x < w; x += sampleSize) {
+                            const idx = (y * w + x) * 4;
+                            if (idx + 2 >= pixels.length) continue;
+                            
+                            const r = pixels[idx];
+                            const g = pixels[idx + 1];
+                            const b = pixels[idx + 2];
+                            const brightness = (r + g + b) / 3;
+                            
+                            if (brightness < 30 || brightness > 240) continue;
+                            
+                            const quantizedR = Math.floor(r / 32) * 32;
+                            const quantizedG = Math.floor(g / 32) * 32;
+                            const quantizedB = Math.floor(b / 32) * 32;
+                            const key = `${quantizedR},${quantizedG},${quantizedB}`;
+                            
+                            if (colorBuckets.has(key)) {
+                                const bucket = colorBuckets.get(key)!;
+                                bucket.r = (bucket.r * bucket.count + r) / (bucket.count + 1);
+                                bucket.g = (bucket.g * bucket.count + g) / (bucket.count + 1);
+                                bucket.b = (bucket.b * bucket.count + b) / (bucket.count + 1);
+                                bucket.count++;
+                            } else {
+                                colorBuckets.set(key, { r, g, b, count: 1 });
+                            }
+                        }
+                    }
+                    
+                    const sorted = Array.from(colorBuckets.values())
+                        .sort((a, b) => b.count - a.count)
+                        .slice(0, 6);
+                    
+                    if (sorted.length > 0) {
+                        videoColors = sorted.map(c => ({
+                            r: Math.min(255, c.r * 1.2),
+                            g: Math.min(255, c.g * 1.1),
+                            b: Math.min(255, c.b * 1.3)
+                        }));
+                    }
+                } catch (e) {}
+            }
+
             function updateRippleZones() {
                 rippleZones.clear();
                 maxRippleRadiusSq = 0;
                 
                 for (let i = 0; i < ripples.length; i++) {
                     const ripple = ripples[i];
-                    const maxRadius = ripple.radius * 3;
+                    const maxRadius = ripple.radius * 3.5;
                     const maxRadiusSq = maxRadius * maxRadius;
                     maxRippleRadiusSq = Math.max(maxRippleRadiusSq, maxRadiusSq);
                     
-                    const minCol = Math.max(0, Math.floor((ripple.x - maxRadius) / fontSize) - 1);
-                    const maxCol = Math.min(cols - 1, Math.ceil((ripple.x + maxRadius) / fontSize) + 1);
-                    const minRow = Math.max(0, Math.floor((ripple.y - maxRadius) / (fontSize * 0.65)) - 1);
-                    const maxRow = Math.min(rows - 1, Math.ceil((ripple.y + maxRadius) / (fontSize * 0.65)) + 1);
+                    const minCol = Math.max(0, Math.floor((ripple.x - maxRadius) / fontSize) - 2);
+                    const maxCol = Math.min(cols - 1, Math.ceil((ripple.x + maxRadius) / fontSize) + 2);
+                    const minRow = Math.max(0, Math.floor((ripple.y - maxRadius) / (fontSize * 0.65)) - 2);
+                    const maxRow = Math.min(rows - 1, Math.ceil((ripple.y + maxRadius) / (fontSize * 0.65)) + 2);
                     
                     const zone = new Set<number>();
                     for (let row = minRow; row <= maxRow; row++) {
                         for (let col = minCol; col <= maxCol; col++) {
                             const idx = row * cols + col;
                             if (idx >= 0 && idx < size) {
-                                zone.add(idx);
+                                const cellX = col * fontSize;
+                                const cellY = row * (fontSize * 0.65);
+                                const distSq = (cellX - ripple.x) ** 2 + (cellY - ripple.y) ** 2;
+                                if (distSq < maxRadiusSq) {
+                                    zone.add(idx);
+                                }
                             }
                         }
                     }
@@ -524,28 +585,41 @@ function Visualizer() {
             }
 
             function getColor(t: number, kick: number, chaos: number) {
-                const speed = 0.15 + chaos * 0.1;
-                const idx = Math.floor(t * speed % colors.length);
-                const next = (idx + 1) % colors.length;
+                const palette = videoColors.length > 0 ? videoColors : baseColors;
+                const speed = 0.12 + chaos * 0.08;
+                const idx = Math.floor(t * speed % palette.length);
+                const next = (idx + 1) % palette.length;
                 const blend = (t * speed) % 1;
-                const wave = Math.sin(t * 2) * 0.3 + 0.7;
-                const chaosWave = Math.sin(t * 1.5 + chaos) * 0.2 + 0.8;
+                
+                const dreamyWave = Math.sin(t * 1.2) * 0.4 + 0.6;
+                const chaosWave = Math.sin(t * 1.8 + chaos * 2) * 0.3 + 0.7;
+                const slowWave = Math.sin(t * 0.5) * 0.2 + 0.8;
 
-                let r = p.lerp(colors[idx].r, colors[next].r, blend) * wave * chaosWave;
-                let g = p.lerp(colors[idx].g, colors[next].g, blend) * wave * chaosWave;
-                let b = p.lerp(colors[idx].b, colors[next].b, blend) * wave * chaosWave;
+                let r = p.lerp(palette[idx].r, palette[next].r, blend);
+                let g = p.lerp(palette[idx].g, palette[next].g, blend);
+                let b = p.lerp(palette[idx].b, palette[next].b, blend);
+                
+                r *= dreamyWave * chaosWave * slowWave;
+                g *= dreamyWave * chaosWave * slowWave;
+                b *= dreamyWave * chaosWave * slowWave;
 
-                if (kick > 0.5) {
-                    const pulse = Math.sin(t * 5) * 0.15 + 0.85;
+                if (kick > 0.4) {
+                    const pulse = Math.sin(t * 6 + chaos) * 0.2 + 0.8;
                     r *= pulse;
                     g *= pulse;
                     b *= pulse;
                 }
+                
+                const saturation = 1.1 + chaos * 0.2;
+                const avg = (r + g + b) / 3;
+                r = avg + (r - avg) * saturation;
+                g = avg + (g - avg) * saturation;
+                b = avg + (b - avg) * saturation;
 
                 return {
-                    r: Math.max(100, Math.min(255, r)),
-                    g: Math.max(120, Math.min(255, g)),
-                    b: Math.max(160, Math.min(255, b))
+                    r: Math.max(80, Math.min(255, r)),
+                    g: Math.max(80, Math.min(255, g)),
+                    b: Math.max(100, Math.min(255, b))
                 };
             }
 
@@ -630,6 +704,12 @@ function Visualizer() {
 
                     if (!stutterActive) {
                         processMotion();
+                        
+                        if (p.millis() - videoColorUpdateTimer > 500) {
+                            extractVideoColors();
+                            videoColorUpdateTimer = p.millis();
+                        }
+                        
                         p.background(0);
                         
                         if (leftHandActive) {
@@ -1072,16 +1152,18 @@ function Visualizer() {
                     
                     for (const f of floatingAscii) {
                         const alpha = (f.life / 80) * 180;
-                        const colorIdx = Math.floor((globalTime * 1 + f.life * 0.1) % colors.length);
-                        const color = colors[colorIdx];
+                        const palette = videoColors.length > 0 ? videoColors : baseColors;
+                        const colorIdx = Math.floor((globalTime * 1 + f.life * 0.1) % palette.length);
+                        const color = palette[colorIdx];
                         p.fill(color.r, color.g, color.b, alpha);
                         p.text(f.char, f.x, f.y);
                     }
                     
                     for (const particle of physicsParticles) {
                         const alpha = (particle.life / 100) * 120;
-                        const colorIdx = Math.floor((globalTime * 0.8 + particle.life * 0.05) % colors.length);
-                        const color = colors[colorIdx];
+                        const palette = videoColors.length > 0 ? videoColors : baseColors;
+                        const colorIdx = Math.floor((globalTime * 0.8 + particle.life * 0.05) % palette.length);
+                        const color = palette[colorIdx];
                         const size = 3 + (particle.mass / 50) * 2;
                         p.fill(color.r, color.g, color.b, alpha);
                         p.noStroke();
@@ -1378,7 +1460,9 @@ function Visualizer() {
                             
                             if (nearestRipple) {
                                 const dist = Math.sqrt(nearestDistSq);
-                                const maxDist = nearestRipple.radius * 3;
+                                const maxDist = nearestRipple.radius * 3.5;
+                                const edgeFadeStart = maxDist * 0.7;
+                                
                                 if (dist < maxDist && dist > 0.1) {
                                     const dx = x - nearestRipple.x;
                                     const dy = y - nearestRipple.y;
@@ -1388,11 +1472,13 @@ function Visualizer() {
                                     const progress = nearestRipple.life / nearestRipple.maxLife;
                                     const fade = Math.max(0, 1 - progress * 1.5);
                                     const centerFade = dist < nearestRipple.radius ? (dist / nearestRipple.radius) : 1;
+                                    const edgeFade = dist > edgeFadeStart ? Math.max(0, 1 - (dist - edgeFadeStart) / (maxDist - edgeFadeStart)) : 1;
+                                    const combinedFade = fade * centerFade * edgeFade;
                                     
                                     const wildSpeed = 1.0 + (chaos * 0.8) + (kickVol * 0.6);
-                                    const primaryWave = Math.sin(waveDist * nearestRipple.frequency * 2 - nearestRipple.phase * wildSpeed) * nearestRipple.strength * fade * centerFade;
-                                    const secondaryWave = Math.sin(waveDist * nearestRipple.frequency * 4 - nearestRipple.phase * 2.5 * wildSpeed) * nearestRipple.strength * 0.5 * fade * centerFade;
-                                    const radialWave = Math.sin(dist * 0.3 + globalTime * 5 * wildSpeed + nearestRipple.phase) * nearestRipple.amplitude * 0.15 * centerFade;
+                                    const primaryWave = Math.sin(waveDist * nearestRipple.frequency * 2 - nearestRipple.phase * wildSpeed) * nearestRipple.strength * combinedFade;
+                                    const secondaryWave = Math.sin(waveDist * nearestRipple.frequency * 4 - nearestRipple.phase * 2.5 * wildSpeed) * nearestRipple.strength * 0.5 * combinedFade;
+                                    const radialWave = Math.sin(dist * 0.3 + globalTime * 5 * wildSpeed + nearestRipple.phase) * nearestRipple.amplitude * 0.15 * combinedFade;
                                     
                                     const totalWave = (primaryWave + secondaryWave + radialWave) * fade;
                                     

@@ -11,7 +11,7 @@ function App() {
     
     try {
       await Promise.all([
-        navigator.mediaDevices.getUserMedia({ video: true, audio: true }).catch(() => {}),
+        navigator.mediaDevices.getUserMedia({ video: true, audio: false }).catch(() => {}),
         audioEngine.init().catch(() => {})
       ]);
       

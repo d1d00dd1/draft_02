@@ -10,14 +10,12 @@ function App() {
     setStarted(true);
     
     try {
-      await Promise.all([
-        navigator.mediaDevices.getUserMedia({ video: true, audio: false }).catch(() => {}),
-        audioEngine.init().catch(() => {})
-      ]);
-      
+      const audioInit = audioEngine.init().catch(() => {});
       if (audioEngine.ctx && audioEngine.ctx.state === 'suspended') {
-        await audioEngine.ctx.resume();
+        audioEngine.ctx.resume();
       }
+      await navigator.mediaDevices.getUserMedia({ video: true, audio: false }).catch(() => {});
+      await audioInit;
       
       audioEngine.setPresence(true);
     } catch (e) {

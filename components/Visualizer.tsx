@@ -23,8 +23,7 @@ function Visualizer() {
             let ripples: any[] = [];
             let glitchOffset: Int16Array;
             let cachedRippleIntensity = 0;
-            let rippleZones: Map<number, Set<number>> = new Map();
-            let nearestRippleCache: Int8Array | null = null; // Cache nearest ripple index per character (-1 = none)
+            let nearestRippleCache: Int8Array | null = null;
             let maxRippleRadiusSq = 0;
             let handDistance = 0.5;
             let charVelX: Float32Array;
@@ -39,24 +38,22 @@ function Visualizer() {
 
             const EMPTY_CHAR = "空";
 
-            // Metallic techy glitchy color palette
             const baseColors = [
-                { r: 100, g: 200, b: 255 }, // Electric cyan
-                { r: 150, g: 220, b: 255 }, // Bright cyan
-                { r: 200, g: 200, b: 220 }, // Silver metallic
-                { r: 180, g: 180, b: 200 }, // Steel blue
-                { r: 120, g: 180, b: 240 }, // Tech blue
-                { r: 160, g: 200, b: 255 }, // Glitch cyan
-                { r: 140, g: 160, b: 200 }, // Metallic gray-blue
-                { r: 100, g: 150, b: 220 }  // Deep tech blue
+                { r: 100, g: 200, b: 255 },
+                { r: 150, g: 220, b: 255 },
+                { r: 200, g: 200, b: 220 },
+                { r: 180, g: 180, b: 200 },
+                { r: 120, g: 180, b: 240 },
+                { r: 160, g: 200, b: 255 },
+                { r: 140, g: 160, b: 200 },
+                { r: 100, g: 150, b: 220 }
             ];
 
             let capture: p5.Element;
             let prevPixels: Uint8ClampedArray | null = null;
             let motionThreshold = 30; 
             let lastMotionTime = 0;
-            let flowX = 0; 
-            let flowY = 0; 
+            let flowX = 0;
             let shakeAccumulator = 0; 
             let lastFlowX = 0;
             let zoomLevel = 1.0;
@@ -102,7 +99,7 @@ function Visualizer() {
             let handVelocityY = 0;
             let gestureRippleCooldown = 0;
             let lastClickTime = 0;
-            const CLICK_RATE_LIMIT = 100; // milliseconds between clicks (10 clicks per second max)
+            const CLICK_RATE_LIMIT = 100;
             let pendingRipples: Array<{x: number, y: number}> = [];
             let rippleUpdateScheduled = false;
             let subBass = 0;
@@ -124,7 +121,7 @@ function Visualizer() {
             p.setup = () => {
                 p.createCanvas(p.windowWidth, p.windowHeight);
                 const ctx = p.drawingContext as CanvasRenderingContext2D;
-                ctx.font = `bold ${fontSize}px "Space Mono", monospace`;
+                ctx.font = `bold ${fontSize}px monospace`;
                 ctx.imageSmoothingEnabled = false;
                 p.textAlign(p.CENTER, p.CENTER);
                 p.noStroke();
@@ -148,47 +145,13 @@ function Visualizer() {
             (p as any).touchStarted = () => {
                 const now = Date.now();
                 if (now - lastClickTime < CLICK_RATE_LIMIT) {
-                    // Queue ripple for later instead of ignoring
                     pendingRipples.push({ x: p.mouseX, y: p.mouseY });
                     return false;
                 }
                 lastClickTime = now;
                 
-                initCamera();
-                touchX = p.mouseX / p.width;
-                touchY = p.mouseY / p.height;
-                isDragging = true;
-                
-                if (audioEngine.ctx && audioEngine.ctx.state === 'suspended') {
-                    audioEngine.ctx.resume();
-                }
-                audioEngine.triggerInteraction();
-                updateGlitchMap(true);
-                audioEngine.setChaos(1.0);
-                
-                // Limit ripples more aggressively
-                if (ripples.length >= 4) {
-                    ripples.sort((a, b) => a.life - b.life);
-                    ripples.shift();
-                }
-                
-                ripples.push({
-                    x: p.mouseX,
-                    y: p.mouseY,
-                    radius: 30,
-                    life: 0,
-                    maxLife: 50 + Math.random() * 15,
-                    strength: 1.2 + Math.random() * 0.3,
-                    velocity: 10 + Math.random() * 5,
-                    amplitude: 10 + Math.random() * 6,
-                    phase: Math.random() * Math.PI * 2,
-                    frequency: 0.25 + Math.random() * 0.15,
-                    interference: Math.random() * 0.5
-                });
-                
-                // Schedule ripple update instead of immediate
-                scheduleRippleUpdate();
-                cachedRippleIntensity = -1;
+                startInteraction(p.mouseX, p.mouseY, true);
+                addBaseRipple(p.mouseX, p.mouseY);
 
                 if (floatingAscii.length < 12) {
                     for(let i = 0; i < 1; i++) {
@@ -231,47 +194,13 @@ function Visualizer() {
             p.mousePressed = () => {
                 const now = Date.now();
                 if (now - lastClickTime < CLICK_RATE_LIMIT) {
-                    // Queue ripple for later instead of ignoring
                     pendingRipples.push({ x: p.mouseX, y: p.mouseY });
                     return;
                 }
                 lastClickTime = now;
                 
-                initCamera();
-                touchX = p.mouseX / p.width;
-                touchY = p.mouseY / p.height;
-                isDragging = true;
-                
-                if (audioEngine.ctx && audioEngine.ctx.state === 'suspended') {
-                    audioEngine.ctx.resume();
-                }
-                audioEngine.triggerInteraction();
-                updateGlitchMap(true);
-                audioEngine.setChaos(1.0);
-                
-                // Limit ripples more aggressively
-                if (ripples.length >= 4) {
-                    ripples.sort((a, b) => a.life - b.life);
-                    ripples.shift();
-                }
-                
-                ripples.push({
-                    x: p.mouseX,
-                    y: p.mouseY,
-                    radius: 30,
-                    life: 0,
-                    maxLife: 50 + Math.random() * 15,
-                    strength: 1.2 + Math.random() * 0.3,
-                    velocity: 10 + Math.random() * 5,
-                    amplitude: 10 + Math.random() * 6,
-                    phase: Math.random() * Math.PI * 2,
-                    frequency: 0.25 + Math.random() * 0.15,
-                    interference: Math.random() * 0.5
-                });
-                
-                // Schedule ripple update instead of immediate
-                scheduleRippleUpdate();
-                cachedRippleIntensity = -1;
+                startInteraction(p.mouseX, p.mouseY, true);
+                addBaseRipple(p.mouseX, p.mouseY);
                 
                 if (floatingAscii.length < 12) {
                     for(let i = 0; i < 1; i++) {
@@ -316,33 +245,8 @@ function Visualizer() {
                 }
                 lastClickTime = now;
                 
-                initCamera();
-                if (audioEngine.ctx && audioEngine.ctx.state === 'suspended') {
-                    audioEngine.ctx.resume();
-                }
-                audioEngine.triggerInteraction();
-                updateGlitchMap(true);
-                audioEngine.setChaos(1.0);
-                
-                // Add ripple for clicks too
-                if (ripples.length >= 4) {
-                    ripples.sort((a, b) => a.life - b.life);
-                    ripples.shift();
-                }
-                ripples.push({
-                    x: p.mouseX,
-                    y: p.mouseY,
-                    radius: 30,
-                    life: 0,
-                    maxLife: 50 + Math.random() * 15,
-                    strength: 1.2 + Math.random() * 0.3,
-                    velocity: 10 + Math.random() * 5,
-                    amplitude: 10 + Math.random() * 6,
-                    phase: Math.random() * Math.PI * 2,
-                    frequency: 0.25 + Math.random() * 0.15,
-                    interference: Math.random() * 0.5
-                });
-                scheduleRippleUpdate();
+                startInteraction(p.mouseX, p.mouseY, false);
+                addBaseRipple(p.mouseX, p.mouseY);
             };
 
             const calculateGrid = () => {
@@ -430,21 +334,15 @@ function Visualizer() {
             }
 
             function updateRippleZones() {
-                rippleZones.clear();
                 maxRippleRadiusSq = 0;
                 
-                // Initialize or resize cache
                 if (!nearestRippleCache || nearestRippleCache.length !== size) {
                     nearestRippleCache = new Int8Array(size);
                 }
                 nearestRippleCache.fill(-1);
                 
-                // Only process active ripples (life < 80% of maxLife)
-                const activeRipples = ripples.filter(r => r.life < r.maxLife * 0.8);
-                
                 for (let i = 0; i < ripples.length; i++) {
                     const ripple = ripples[i];
-                    // Skip if ripple is too old
                     if (ripple.life >= ripple.maxLife * 0.8) continue;
                     
                     const maxRadius = ripple.radius * 3.5;
@@ -456,8 +354,6 @@ function Visualizer() {
                     const minRow = Math.max(0, Math.floor((ripple.y - maxRadius) / (fontSize * 0.65)) - 2);
                     const maxRow = Math.min(rows - 1, Math.ceil((ripple.y + maxRadius) / (fontSize * 0.65)) + 2);
                     
-                    const zone = new Set<number>();
-                    // Use larger step for performance on large ripples
                     const step = maxRadius > 200 ? 2 : 1;
                     for (let row = minRow; row <= maxRow; row += step) {
                         for (let col = minCol; col <= maxCol; col += step) {
@@ -467,8 +363,6 @@ function Visualizer() {
                                 const cellY = row * (fontSize * 0.65);
                                 const distSq = (cellX - ripple.x) ** 2 + (cellY - ripple.y) ** 2;
                                 if (distSq < maxRadiusSq) {
-                                    zone.add(idx);
-                                    // Cache nearest ripple - update if this is closer
                                     if (nearestRippleCache[idx] === -1) {
                                         nearestRippleCache[idx] = i;
                                     } else {
@@ -482,14 +376,12 @@ function Visualizer() {
                             }
                         }
                     }
-                    rippleZones.set(i, zone);
                 }
             }
             
             function scheduleRippleUpdate() {
                 if (!rippleUpdateScheduled) {
                     rippleUpdateScheduled = true;
-                    // Defer update to next frame
                     setTimeout(() => {
                         if (pendingRipples.length > 0 || ripples.length > 0) {
                             updateRippleZones();
@@ -701,12 +593,7 @@ function Visualizer() {
                     
                     const pinchPoint = detectPinch(clusters, w, h);
                     if (pinchPoint) {
-                        if (ripples.length >= 3) {
-                            ripples.sort((a, b) => a.life - b.life);
-                            ripples.shift();
-                        }
-                        
-                        ripples.push({
+                        addRipple({
                             x: pinchPoint.x,
                             y: pinchPoint.y,
                             radius: 30,
@@ -718,7 +605,7 @@ function Visualizer() {
                             phase: Math.random() * Math.PI * 2,
                             frequency: 0.25 + Math.random() * 0.15,
                             interference: Math.random() * 0.5
-                        });
+                        }, 3);
                         updateRippleZones();
                         cachedRippleIntensity = -1;
                         
@@ -736,7 +623,6 @@ function Visualizer() {
                         const avgY = (sumMotionY / totalMotion) / (h/2); 
                         
                         flowX = p.lerp(flowX, avgX, 0.3);
-                        flowY = p.lerp(flowY, avgY, 0.3);
                         
                         if (Math.sign(flowX) !== Math.sign(lastFlowX) && Math.abs(flowX - lastFlowX) > 0.4) {
                             shakeAccumulator += 1;
@@ -781,7 +667,6 @@ function Visualizer() {
 
                     } else {
                         flowX = p.lerp(flowX, 0, 0.1);
-                        flowY = p.lerp(flowY, 0, 0.1);
                         targetZoom = 1.0;
                         shakeAccumulator = Math.max(0, shakeAccumulator - 0.2);
                         
@@ -807,12 +692,11 @@ function Visualizer() {
 
             function getColor(t: number, kick: number, chaos: number) {
                 const palette = videoColors.length > 0 ? videoColors : baseColors;
-                const speed = 0.08 + chaos * 0.05; // Slower, more controlled
+                const speed = 0.08 + chaos * 0.05;
                 const idx = Math.floor(t * speed % palette.length);
                 const next = (idx + 1) % palette.length;
                 const blend = (t * speed) % 1;
                 
-                // Glitchy metallic modulation
                 const glitchWave = Math.sin(t * 2.5 + chaos * 3) * 0.15 + 0.85;
                 const techPulse = Math.sin(t * 8 + chaos * 5) * 0.1 + 0.9;
                 const metallicShimmer = Math.sin(t * 12 + chaos * 7) * 0.08 + 0.92;
@@ -821,7 +705,6 @@ function Visualizer() {
                 let g = p.lerp(palette[idx].g, palette[next].g, blend);
                 let b = p.lerp(palette[idx].b, palette[next].b, blend);
                 
-                // Apply metallic techy modulation
                 r *= glitchWave * techPulse * metallicShimmer;
                 g *= glitchWave * techPulse * metallicShimmer;
                 b *= glitchWave * techPulse * metallicShimmer;
@@ -833,7 +716,6 @@ function Visualizer() {
                     b *= pulse;
                 }
                 
-                // Add glitchy color shifts
                 if (chaos > 0.6) {
                     const glitchShift = Math.sin(t * 15 + chaos * 10) * chaos * 20;
                     r = Math.max(0, Math.min(255, r + glitchShift));
@@ -841,14 +723,12 @@ function Visualizer() {
                     b = Math.max(0, Math.min(255, b + glitchShift * 0.8));
                 }
                 
-                // Metallic saturation - keep colors more consistent
                 const saturation = 0.9 + chaos * 0.15;
                 const avg = (r + g + b) / 3;
                 r = avg + (r - avg) * saturation;
                 g = avg + (g - avg) * saturation;
                 b = avg + (b - avg) * saturation;
                 
-                // Boost blues and cyans for techy feel
                 b = Math.min(255, b * 1.1);
                 g = Math.min(255, g * 1.05);
 
@@ -888,12 +768,7 @@ function Visualizer() {
                         const rippleX = lastHandX * p.width;
                         const rippleY = lastHandY * p.height;
                         
-                        if (ripples.length >= 3) {
-                            ripples.sort((a, b) => a.life - b.life);
-                            ripples.shift();
-                        }
-                        
-                        ripples.push({
+                        addRipple({
                             x: rippleX,
                             y: rippleY,
                             radius: 25 + handSpeed * 20,
@@ -905,7 +780,7 @@ function Visualizer() {
                             phase: Math.random() * Math.PI * 2,
                             frequency: 0.2 + handSpeed * 0.2,
                             interference: Math.random() * 0.5
-                        });
+                        }, 3);
                         updateRippleZones();
                         cachedRippleIntensity = -1;
                         gestureRippleCooldown = 15;
@@ -971,27 +846,13 @@ function Visualizer() {
                         return ripple.life < ripple.maxLife && ripple.radius < p.width + p.height;
                     });
                     
-                    // Process pending ripples
                     if (pendingRipples.length > 0 && ripples.length < 4) {
                         const pending = pendingRipples.shift();
                         if (pending) {
-                            ripples.push({
-                                x: pending.x,
-                                y: pending.y,
-                                radius: 30,
-                                life: 0,
-                                maxLife: 50 + Math.random() * 15,
-                                strength: 1.2 + Math.random() * 0.3,
-                                velocity: 10 + Math.random() * 5,
-                                amplitude: 10 + Math.random() * 6,
-                                phase: Math.random() * Math.PI * 2,
-                                frequency: 0.25 + Math.random() * 0.15,
-                                interference: Math.random() * 0.5
-                            });
+                            addBaseRipple(pending.x, pending.y);
                         }
                     }
                     
-                    // Only update ripple zones if ripple count changed or every 5 frames (reduce expensive calculations)
                     const shouldUpdateZones = ripples.length !== prevRippleCount || 
                         (ripples.length > 0 && p.frameCount % 5 === 0);
                     if (shouldUpdateZones) {
@@ -1097,7 +958,6 @@ function Visualizer() {
                         zoomLevel = p.lerp(zoomLevel, targetZoom, 0.15 + chaos * 0.1);
 
                         if (leftHandActive || rightHandActive) {
-                            // More frequent lotus petals with metallic colors
                             if (Math.random() > 0.95) {
                                 const pdColor = getColor(globalTime, kickVol, chaos);
                                 floatingPetals.push({
@@ -1273,10 +1133,9 @@ function Visualizer() {
                                         const flowerShape = Math.sin(centerDist * Math.PI * 4 + globalTime * 2) * 0.5 + 0.5;
                                         const petalPattern = Math.sin(Math.atan2(r - rows/2, c - cols/2) * 6 + globalTime * 1.5) * 0.3 + 0.7;
                                         
-                                const flowerIntensity = (1 - centerDist) * flowerShape * petalPattern * (0.6 + audioReactive);
+                                        const flowerIntensity = (1 - centerDist) * flowerShape * petalPattern * (0.6 + audioReactive);
                                 
-                                // Lower threshold to show more lotus
-                                if (flowerIntensity > 0.25 || bright > 40) {
+                                        if (flowerIntensity > 0.25 || bright > 40) {
                                             gridChars[i] = EMPTY_CHAR;
                                             if (i + 1 < cols * rows) gridChars[i + 1] = EMPTY_CHAR;
                                             
@@ -1306,8 +1165,8 @@ function Visualizer() {
                                         } else {
                                             gridChars[i] = "";
                                             if (i + 1 < cols * rows) gridChars[i + 1] = "";
-                                        gridMeta[i] = 0;
-                                        gridGlow[i] = 0;
+                                            gridMeta[i] = 0;
+                                            gridGlow[i] = 0;
                                             if (i + 1 < cols * rows) {
                                                 gridMeta[i + 1] = 0;
                                                 gridGlow[i + 1] = 0;
@@ -1331,7 +1190,6 @@ function Visualizer() {
                                 const petalPattern = Math.sin(Math.atan2(r - rows/2, c - cols/2) * 6 + globalTime * 1.5) * 0.3 + 0.7;
                                 const flowerIntensity = (1 - centerDist) * flowerShape * petalPattern * (0.6 + audioReactive);
                                 
-                                // Lower threshold to show more lotus
                                 if (flowerIntensity > 0.15) {
                                     gridChars[i] = EMPTY_CHAR;
                                     const pdColor = getColor(globalTime, kickVol, chaos);
@@ -1430,7 +1288,6 @@ function Visualizer() {
                         const pdColor = getColor(globalTime, kickVol, chaos);
                         const layerCount = Math.max(3, Math.min(4, 3 + Math.floor(mid * 2))); 
                         
-                        // Enhanced lotus flower layers with more petals
                         const layers = [
                             { type: 'pod', rings: 5, dens: 30, rad: 0.15, height: 0.35 },
                             { type: 'petal', rings: 10, dens: 70, rad: 0.6, height: 0.7, k: 6 + (bass*6), angle: Math.PI/3.2, width: 1.6, offset: globalTime },
@@ -1439,7 +1296,6 @@ function Visualizer() {
                             { type: 'petal', rings: 16, dens: 100, rad: 1.8, height: 0.08, k: 12 + (treble*8), angle: Math.PI/1.6, width: 2.4, offset: Math.PI/10 },
                         ];
 
-                        // Always show at least 4 layers for full lotus, up to 5
                         const activeLayers = layers.slice(0, Math.max(4, Math.min(5, layerCount)));
 
                         activeLayers.forEach(l => {
@@ -1563,7 +1419,6 @@ function Visualizer() {
                         
                         charAccelY[i] += gravity * (1 + audioForce * 0.5);
                         
-                        // Use cached nearest ripple for performance
                         if (ripples.length > 0 && nearestRippleCache && nearestRippleCache[i] >= 0) {
                             const cachedIdx = nearestRippleCache[i];
                             if (cachedIdx < ripples.length) {
@@ -1718,7 +1573,6 @@ function Visualizer() {
                             let x = charBaseX[i] + charVelX[i] + glitchOffset[i];
                             let y = charBaseY[i] + charVelY[i];
                             
-                            // Use cached nearest ripple index for O(1) lookup instead of O(n) loop
                             const cachedRippleIdx = nearestRippleCache && nearestRippleCache[i] >= 0 ? nearestRippleCache[i] : -1;
                             const nearestRipple = cachedRippleIdx >= 0 && cachedRippleIdx < ripples.length ? ripples[cachedRippleIdx] : null;
                             
@@ -1739,7 +1593,6 @@ function Visualizer() {
                                 continue;
                             }
                             
-                            // Calculate distance once for the cached nearest ripple
                             const dx = x - nearestRipple.x;
                             const dy = y - nearestRipple.y;
                             const nearestDistSq = dx * dx + dy * dy;
@@ -1754,7 +1607,6 @@ function Visualizer() {
                             const maxDist = nearestRipple.radius * 3.5;
                             const edgeFadeStart = maxDist * 0.7;
                             
-                            // Calculate distance to screen edges for smooth boundary fade
                             const distToLeftEdge = x;
                             const distToRightEdge = p.width - x;
                             const distToTopEdge = y;
@@ -1902,6 +1754,47 @@ function Visualizer() {
                     }
                 } catch(e) { }
             };
+
+            function startInteraction(x: number, y: number, drag: boolean) {
+                if (drag) {
+                    touchX = x / p.width;
+                    touchY = y / p.height;
+                    isDragging = true;
+                }
+                if (audioEngine.ctx && audioEngine.ctx.state === 'suspended') {
+                    audioEngine.ctx.resume();
+                }
+                audioEngine.triggerInteraction();
+                updateGlitchMap(true);
+                audioEngine.setChaos(1.0);
+                initCamera();
+            }
+
+            function addRipple(ripple: any, limit = 4) {
+                if (ripples.length >= limit) {
+                    ripples.sort((a, b) => a.life - b.life);
+                    ripples.shift();
+                }
+                ripples.push(ripple);
+            }
+
+            function addBaseRipple(x: number, y: number) {
+                addRipple({
+                    x,
+                    y,
+                    radius: 30,
+                    life: 0,
+                    maxLife: 50 + Math.random() * 15,
+                    strength: 1.2 + Math.random() * 0.3,
+                    velocity: 10 + Math.random() * 5,
+                    amplitude: 10 + Math.random() * 6,
+                    phase: Math.random() * Math.PI * 2,
+                    frequency: 0.25 + Math.random() * 0.15,
+                    interference: Math.random() * 0.5
+                });
+                scheduleRippleUpdate();
+                cachedRippleIntensity = -1;
+            }
 
             function getPetalRadius(theta: number, k: number, widthMod: number) {
                 return Math.pow(Math.abs(Math.cos(k * theta / 2)), 1.0 / widthMod);

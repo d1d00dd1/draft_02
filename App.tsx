@@ -39,10 +39,18 @@ function App() {
   };
 
   return (
-    <div className="relative w-full h-screen bg-black overflow-hidden select-none cursor-none" onClick={handleStart}>
+    <div
+      className="relative w-full h-screen bg-black overflow-hidden select-none cursor-none"
+      onClick={handleStart}
+      onTouchStart={handleStart}
+    >
       <Visualizer stream={stream} />
       {!started && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/10 pointer-events-auto" onClick={handleStart} />
+        <div
+          className="absolute inset-0 z-50 flex items-center justify-center bg-black/10 pointer-events-auto"
+          onClick={handleStart}
+          onTouchStart={handleStart}
+        />
       )}
       
       <style>{`body, .cursor-none { cursor: none; }`}</style>

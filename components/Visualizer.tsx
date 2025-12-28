@@ -1660,6 +1660,14 @@ function Visualizer() {
                             const maxDist = nearestRipple.radius * 3.5;
                             const edgeFadeStart = maxDist * 0.7;
                             
+                            // Calculate distance to screen edges for smooth boundary fade
+                            const distToLeftEdge = x;
+                            const distToRightEdge = p.width - x;
+                            const distToTopEdge = y;
+                            const distToBottomEdge = p.height - y;
+                            const minEdgeDist = Math.min(distToLeftEdge, distToRightEdge, distToTopEdge, distToBottomEdge);
+                            const edgeBoundaryFade = minEdgeDist < 100 ? Math.max(0, minEdgeDist / 100) : 1;
+                            
                             if (dist < maxDist && dist > 0.1) {
                                 const angle = Math.atan2(dy, dx);
                                 const waveDist = dist - nearestRipple.radius;
@@ -1668,7 +1676,7 @@ function Visualizer() {
                                 const fade = Math.max(0, 1 - progress * 1.5);
                                 const centerFade = dist < nearestRipple.radius ? (dist / nearestRipple.radius) : 1;
                                 const edgeFade = dist > edgeFadeStart ? Math.max(0, 1 - (dist - edgeFadeStart) / (maxDist - edgeFadeStart)) : 1;
-                                const combinedFade = fade * centerFade * edgeFade;
+                                const combinedFade = fade * centerFade * edgeFade * edgeBoundaryFade;
                                 
                                 const wildSpeed = 1.0 + (chaos * 0.8) + (kickVol * 0.6);
                                 const primaryWave = Math.sin(waveDist * nearestRipple.frequency * 2 - nearestRipple.phase * wildSpeed) * nearestRipple.strength * combinedFade;

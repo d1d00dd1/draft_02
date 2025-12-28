@@ -9,6 +9,9 @@ function Visualizer() {
     useEffect(() => {
         if (!containerRef.current) return;
 
+        let rippleUpdateTimer: number | null = null;
+        let isDestroyed = false;
+
         const sketch = (p: p5) => {
             const fontSize = 20;
             let cols: number, rows: number, size: number;
@@ -358,6 +361,7 @@ function Visualizer() {
             }
 
             function updateRippleZones() {
+                if (isDestroyed) return;
                 rippleZones.clear();
                 maxRippleRadiusSq = 0;
                 
@@ -410,11 +414,16 @@ function Visualizer() {
             function scheduleRippleUpdate() {
                 if (!rippleUpdateScheduled) {
                     rippleUpdateScheduled = true;
-                    setTimeout(() => {
+                    rippleUpdateTimer = window.setTimeout(() => {
+                        if (isDestroyed) {
+                            rippleUpdateScheduled = false;
+                            return;
+                        }
                         if (pendingRipples.length > 0 || ripples.length > 0) {
                             updateRippleZones();
                         }
                         rippleUpdateScheduled = false;
+                        rippleUpdateTimer = null;
                         pendingRipples = [];
                     }, 0);
                 }
@@ -1938,6 +1947,11 @@ function Visualizer() {
 
         return () => {
              if (p5Instance.current) {
+                isDestroyed = true;
+                if (rippleUpdateTimer !== null) {
+                    window.clearTimeout(rippleUpdateTimer);
+                    rippleUpdateTimer = null;
+                }
                 document.querySelectorAll('video').forEach(v => v.remove());
                  p5Instance.current.remove();
              }

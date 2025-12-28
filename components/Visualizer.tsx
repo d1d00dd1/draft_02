@@ -2,9 +2,18 @@ import React, { useEffect, useRef } from 'react';
 import p5 from 'p5';
 import { audioEngine } from '../services/AudioEngine';
 
-function Visualizer() {
+type VisualizerProps = {
+    stream: MediaStream | null;
+};
+
+function Visualizer({ stream }: VisualizerProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const p5Instance = useRef<p5 | null>(null);
+    const streamRef = useRef<MediaStream | null>(stream);
+
+    useEffect(() => {
+        streamRef.current = stream;
+    }, [stream]);
 
     useEffect(() => {
         if (!containerRef.current) return;
@@ -113,9 +122,15 @@ function Visualizer() {
             
             const initCamera = async () => {
                 if (cameraInitialized) return;
+                const activeStream = streamRef.current;
+                if (!activeStream) return;
                 try {
-                    await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-                    capture = p.createCapture(p.VIDEO);
+                    capture = p.createCapture((activeStream as unknown) as any);
+                    const video = (capture as any).elt as HTMLVideoElement | undefined;
+                    if (video) {
+                        video.srcObject = activeStream;
+                        video.play().catch(() => {});
+                    }
                     capture.size(120, 90);
                     capture.hide();
                 } catch (e) {}
@@ -1955,6 +1970,15 @@ function Visualizer() {
                 document.querySelectorAll('video').forEach(v => v.remove());
                  p5Instance.current.remove();
              }
+            if (p5Instance.current) {
+                document.querySelectorAll('video').forEach((v) => v.remove());
+                p5Instance.current.remove();
+                p5Instance.current = null;
+            }
+            if (streamRef.current) {
+                streamRef.current.getTracks().forEach((track) => track.stop());
+                streamRef.current = null;
+            }
         };
     }, []);
 

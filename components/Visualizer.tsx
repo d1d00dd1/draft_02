@@ -100,6 +100,9 @@ function Visualizer({ stream }: VisualizerProps) {
             let lastPinchDistance = Infinity;
             let pinchCooldown = 0;
             let lastPinchClusters: Array<{x: number, y: number}> = [];
+            let pinchDistances: number[] = [];
+            let pinchCenters: Array<{x: number, y: number}> = [];
+            let pinchStableFrames = 0;
             let screenShakeX = 0;
             let screenShakeY = 0;
             let chromaticAberration = 0;
@@ -147,7 +150,19 @@ function Visualizer({ stream }: VisualizerProps) {
                 return false;
             };
 
-            const addRipple = (x: number, y: number, resetCache: boolean) => {
+            const addRipple = (
+                x: number,
+                y: number,
+                resetCache: boolean,
+                overrides?: Partial<{
+                    radius: number;
+                    maxLife: number;
+                    strength: number;
+                    velocity: number;
+                    amplitude: number;
+                    frequency: number;
+                }>
+            ) => {
                 if (ripples.length >= 4) {
                     ripples.sort((a, b) => a.life - b.life);
                     ripples.shift();
@@ -155,14 +170,14 @@ function Visualizer({ stream }: VisualizerProps) {
                 ripples.push({
                     x,
                     y,
-                    radius: 30,
+                    radius: overrides?.radius ?? 30,
                     life: 0,
-                    maxLife: 50 + Math.random() * 15,
-                    strength: 1.2 + Math.random() * 0.3,
-                    velocity: 10 + Math.random() * 5,
-                    amplitude: 10 + Math.random() * 6,
+                    maxLife: overrides?.maxLife ?? (50 + Math.random() * 15),
+                    strength: overrides?.strength ?? (1.2 + Math.random() * 0.3),
+                    velocity: overrides?.velocity ?? (10 + Math.random() * 5),
+                    amplitude: overrides?.amplitude ?? (10 + Math.random() * 6),
                     phase: Math.random() * Math.PI * 2,
-                    frequency: 0.25 + Math.random() * 0.15,
+                    frequency: overrides?.frequency ?? (0.25 + Math.random() * 0.15),
                     interference: Math.random() * 0.5
                 });
                 scheduleRippleUpdate();
@@ -509,46 +524,81 @@ function Visualizer({ stream }: VisualizerProps) {
                 return fingerEstimate;
             }
 
-            function detectPinch(clusters: Array<{x: number, y: number, points: number}>, w: number, h: number): {x: number, y: number} | null {
+            function detectPinch(
+                clusters: Array<{x: number, y: number, points: number}>,
+                w: number,
+                h: number,
+                minClusterPoints: number
+            ): {x: number, y: number} | null {
                 if (clusters.length < 2) {
                     lastPinchClusters = [];
                     lastPinchDistance = Infinity;
+                    pinchDistances = [];
+                    pinchCenters = [];
+                    pinchStableFrames = 0;
                     return null;
                 }
                 
-                const significantClusters = clusters.filter(c => c.points >= 2).slice(0, 2);
+                const significantClusters = clusters
+                    .filter(c => c.points >= minClusterPoints)
+                    .sort((a, b) => b.points - a.points)
+                    .slice(0, 2);
                 if (significantClusters.length < 2) {
                     lastPinchClusters = [];
                     lastPinchDistance = Infinity;
+                    pinchDistances = [];
+                    pinchCenters = [];
+                    pinchStableFrames = 0;
                     return null;
                 }
                 
                 const c1 = significantClusters[0];
                 const c2 = significantClusters[1];
                 const currentDist = Math.sqrt((c1.x - c2.x) ** 2 + (c1.y - c2.y) ** 2);
-                
+                const centerX = (c1.x + c2.x) / 2;
+                const centerY = (c1.y + c2.y) / 2;
+                const minAxis = Math.min(w, h);
+                const pinchThreshold = minAxis * 0.18;
+                const minDistance = minAxis * 0.05;
+                const closingThreshold = Math.max(3, pinchThreshold * 0.12);
+
                 if (lastPinchClusters.length === 2) {
-                    const prevDist = Math.sqrt(
-                        (lastPinchClusters[0].x - lastPinchClusters[1].x) ** 2 + 
-                        (lastPinchClusters[0].y - lastPinchClusters[1].y) ** 2
+                    pinchDistances.push(currentDist);
+                    pinchCenters.push({ x: centerX, y: centerY });
+                    if (pinchDistances.length > 5) pinchDistances.shift();
+                    if (pinchCenters.length > 5) pinchCenters.shift();
+
+                    const distDrop = pinchDistances.length > 1
+                        ? pinchDistances[0] - pinchDistances[pinchDistances.length - 1]
+                        : 0;
+                    const isClosing = distDrop > closingThreshold;
+                    const isNear = currentDist < pinchThreshold && currentDist > minDistance;
+
+                    const avgCenter = pinchCenters.reduce(
+                        (acc, cur) => ({ x: acc.x + cur.x, y: acc.y + cur.y }),
+                        { x: 0, y: 0 }
                     );
-                    
-                    const pinchThreshold = 40;
-                    const minDistance = 20;
-                    
-                    if (currentDist < pinchThreshold && 
-                        currentDist < prevDist && 
-                        prevDist - currentDist > 8 &&
-                        currentDist > minDistance &&
-                        pinchCooldown <= 0) {
-                        
-                        const centerX = ((c1.x + c2.x) / 2) / w * p.width;
-                        const centerY = ((c1.y + c2.y) / 2) / h * p.height;
-                        
+                    avgCenter.x /= pinchCenters.length;
+                    avgCenter.y /= pinchCenters.length;
+                    const maxCenterDrift = pinchCenters.reduce((max, cur) => {
+                        const drift = Math.hypot(cur.x - avgCenter.x, cur.y - avgCenter.y);
+                        return Math.max(max, drift);
+                    }, 0);
+                    const centerStable = maxCenterDrift < pinchThreshold * 0.35;
+
+                    if (isClosing && isNear && centerStable) {
+                        pinchStableFrames++;
+                    } else {
+                        pinchStableFrames = 0;
+                    }
+
+                    if (pinchStableFrames >= 2 && pinchCooldown <= 0) {
+                        const pinchX = (centerX / w) * p.width;
+                        const pinchY = (centerY / h) * p.height;
                         lastPinchDistance = currentDist;
-                        pinchCooldown = 30;
-                        
-                        return { x: centerX, y: centerY };
+                        pinchCooldown = 36;
+                        pinchStableFrames = 0;
+                        return { x: pinchX, y: pinchY };
                     }
                 }
                 
@@ -584,7 +634,7 @@ function Visualizer({ stream }: VisualizerProps) {
                     let rightMotionY = 0, rightCount = 0;
                     const motionPoints: Array<{x: number, y: number}> = [];
 
-                    const sampleStep = 64;
+                    const sampleStep = 32;
                     
                     for (let i = 0; i < currentPixels.length; i += 4 * sampleStep) { 
                         const bright = currentPixels[i]; 
@@ -643,28 +693,14 @@ function Visualizer({ stream }: VisualizerProps) {
                         }
                     }
                     
-                    const pinchPoint = detectPinch(clusters, w, h);
+                    const minClusterPoints = Math.max(3, Math.floor(motionPoints.length * 0.02));
+                    const pinchPoint = detectPinch(clusters, w, h, minClusterPoints);
                     if (pinchPoint) {
-                        if (ripples.length >= 3) {
-                            ripples.sort((a, b) => a.life - b.life);
-                            ripples.shift();
-                        }
-                        
-                        ripples.push({
-                            x: pinchPoint.x,
-                            y: pinchPoint.y,
-                            radius: 30,
-                            life: 0,
-                            maxLife: 50 + Math.random() * 15,
+                        addRipple(pinchPoint.x, pinchPoint.y, true, {
                             strength: 1.4 + Math.random() * 0.4,
                             velocity: 12 + Math.random() * 6,
-                            amplitude: 12 + Math.random() * 8,
-                            phase: Math.random() * Math.PI * 2,
-                            frequency: 0.25 + Math.random() * 0.15,
-                            interference: Math.random() * 0.5
+                            amplitude: 12 + Math.random() * 8
                         });
-                        updateRippleZones();
-                        cachedRippleIntensity = -1;
                         
                         audioEngine.triggerInteraction();
                         updateGlitchMap(true);

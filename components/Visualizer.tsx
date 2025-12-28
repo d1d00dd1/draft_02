@@ -18,6 +18,9 @@ function Visualizer({ stream }: VisualizerProps) {
     useEffect(() => {
         if (!containerRef.current) return;
 
+        let rippleUpdateTimer: number | null = null;
+        let isDestroyed = false;
+
         const sketch = (p: p5) => {
             const fontSize = 20;
             let cols: number, rows: number, size: number;
@@ -373,6 +376,7 @@ function Visualizer({ stream }: VisualizerProps) {
             }
 
             function updateRippleZones() {
+                if (isDestroyed) return;
                 rippleZones.clear();
                 maxRippleRadiusSq = 0;
                 
@@ -425,11 +429,16 @@ function Visualizer({ stream }: VisualizerProps) {
             function scheduleRippleUpdate() {
                 if (!rippleUpdateScheduled) {
                     rippleUpdateScheduled = true;
-                    setTimeout(() => {
+                    rippleUpdateTimer = window.setTimeout(() => {
+                        if (isDestroyed) {
+                            rippleUpdateScheduled = false;
+                            return;
+                        }
                         if (pendingRipples.length > 0 || ripples.length > 0) {
                             updateRippleZones();
                         }
                         rippleUpdateScheduled = false;
+                        rippleUpdateTimer = null;
                         pendingRipples = [];
                     }, 0);
                 }
@@ -1952,6 +1961,15 @@ function Visualizer({ stream }: VisualizerProps) {
         p5Instance.current = new p5(sketch, containerRef.current);
 
         return () => {
+             if (p5Instance.current) {
+                isDestroyed = true;
+                if (rippleUpdateTimer !== null) {
+                    window.clearTimeout(rippleUpdateTimer);
+                    rippleUpdateTimer = null;
+                }
+                document.querySelectorAll('video').forEach(v => v.remove());
+                 p5Instance.current.remove();
+             }
             if (p5Instance.current) {
                 document.querySelectorAll('video').forEach((v) => v.remove());
                 p5Instance.current.remove();
